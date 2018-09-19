@@ -1,0 +1,4 @@
+name: "Default"
+
+mdp_size: 10
+strategy: 'uniform'
