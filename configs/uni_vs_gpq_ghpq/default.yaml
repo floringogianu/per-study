@@ -1,0 +1,4 @@
+name: "Uniform vs Greedy-PQ vs Greedy-HPQ"
+
+mdp_size: 8
+strategy: 'uniform'

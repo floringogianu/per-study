@@ -1,0 +1,6 @@
+_experiment_parameters:
+  mdp_size: 6
+  strategy: greedy-pq
+mdp_size: 6
+strategy: greedy-pq
+title: strategy=greedy-pq; mdp_size=6

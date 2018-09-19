@@ -1,0 +1,6 @@
+_experiment_parameters:
+  mdp_size: 16
+  strategy: uniform
+mdp_size: 16
+strategy: uniform
+title: strategy=uniform; mdp_size=16
