@@ -1,4 +1,6 @@
 name: "Default"
 
 mdp_size: 10
-strategy: 'uniform'
+
+experience_replay:
+  sampling: 'uniform'

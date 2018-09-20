@@ -1,5 +1,4 @@
 """ Compares different experience replay sampling methods. """
-
 import torch
 from torch import nn
 from torch.optim import SGD
@@ -24,6 +23,7 @@ def train(n, mem, estimator, optimizer, verbose=True, update_priorities=None):
 
     has_converged = False
     step_cnt = 0
+
     while not has_converged:
         batch = mem.sample()
         try:
@@ -70,65 +70,54 @@ def train(n, mem, estimator, optimizer, verbose=True, update_priorities=None):
     return step_cnt
 
 
-def configure_experiment(n, args, lr=0.25):
-    """ Sets up the objects required for running the experiment. """
+def configure_experiment(opt, lr=0.25):
+    """ Sets up the objects required for running the experiment.
+    """
+    n = opt.mdp_size
+    sampling_type = opt.experience_replay.sampling
+
+    # sample the env
     env = gym.make(f'BlindCliffWalk-N{n}-v0')
     transitions = get_all_transitions(env, n)
 
-    mem = get_experience_replay(len(transitions), args)
-
+    # construct and populate Experience Replay
+    mem, cb = get_experience_replay(len(transitions),
+                                    **opt.experience_replay.__dict__)
     for transition in transitions:
         mem.push(transition)
 
+    # configure estimator and optimizer
     estimator = nn.Linear(n+1, 2, bias=True)
     optimizer = SGD(estimator.parameters(), lr=lr)
     optimizer.zero_grad()
 
-    cb = greedy_update if args.strategy in ('greedy-pq', 'greedy-hpq') else None
-    cb = rank_update if args.strategy == 'rank' else cb
+    # get sampling type tag, we use it for reporting
+    tag = get_sampling_variant(**opt.experience_replay.__dict__)
 
-    print(f'Experience Replay Implementation: {mem}')
+    print(f'>>  Experience Replay: {mem}')
 
-    return mem, estimator, optimizer, cb
+    return mem, cb, estimator, optimizer, tag
 
 
-def greedy_update(mem, transitions, losses):
-    """ Callback for reinserting transitions in the experience replay with the
-    new priorities.
+def get_sampling_variant(sampling='uniform', **kwargs):
+    """ Creates a tag of the form sampling + hyperparams if hyperparams exist
     """
-    td_errors = np.abs(losses).squeeze()
-    td_errors = [td_errors] if td_errors.shape == () else td_errors
+    hp_names = ('alpha', 'beta')
+    hyperparams = {h: kwargs[h] for h in hp_names if h in kwargs}
 
-    for td_err, transition in zip(td_errors, transitions):
-        mem.push_updated(td_err, transition)
-
-
-def rank_update(mem, transitions, losses):
-    """ Callback for updating priorities in the experience replay.
-    """
-    td_errors = np.abs(losses).squeeze()
-    td_errors = [td_errors] if td_errors.shape == () else td_errors
-
-    for td_err, transition in zip(td_errors, transitions):
-        # for rank based updates the sampled transition contains the idx in the
-        # replay buffer from where it was sampled
-        mem.update(transition[0], td_err)
-
-
-def get_sampling_variant(strategy, **kwargs):
     if not kwargs:
-        return strategy
-    for k, v in kwargs.items():
-        strategy += f'_{k}:{v}'
-    return strategy
+        return sampling
+    for k, v in hyperparams.items():
+        sampling += f'_{k}:{v}'
+    return sampling
 
 
-
-def run(args):
+def run(opt):
     """ Experiment trial. """
-    n = args.mdp_size
+    n = opt.mdp_size
 
-    mem, estimator, optimizer, cb = configure_experiment(n, args)
+    mem, cb, estimator, optimizer, tag = configure_experiment(opt)
+
     # initialize weights
     estimator.weight.data.normal_(0, 0.1)
     estimator.bias.data.normal_(0, 1)
@@ -138,27 +127,23 @@ def run(args):
                      verbose=True)
 
     # do reporting
-    hp_names = ('alpha', 'beta')
-    hyperparams = {h: args.__dict__[h] for h in hp_names if h in args}
-    sampling_variant = get_sampling_variant(args.strategy, **hyperparams)
-
     columns = ['N', 'mem_size', 'optim_steps', 'trial', 'sampling_type']
-    data = [[n, len(mem), step_cnt, args.run_id, sampling_variant]]
+    data = [[n, len(mem), step_cnt, opt.run_id, tag]]
     result = pd.DataFrame(data, columns=columns)
 
-    # log results
-    print(f'N={n}, trial={args.run_id} results -------', flush=True)
-    print(result, flush=True)
-
     # save panda
-    result.to_msgpack(f'./{args.out_dir}/results.msgpack')
+    result.to_msgpack(f'./{opt.out_dir}/results.msgpack')
+
+    # log results
+    print(f'N={n}, trial={opt.run_id} results -------', flush=True)
+    print(result, flush=True)
 
 
 def main():
     """ Entry point. """
-    args = read_config()
-    args = create_paths(args)
-    run(args)
+    opt = read_config()
+    opt = create_paths(opt)
+    run(opt)
 
 
 if __name__ == "__main__":

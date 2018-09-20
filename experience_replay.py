@@ -17,20 +17,52 @@ import numpy as np
 
 from wintermute.data_structures import NaiveExperienceReplay
 from data_structures import PriorityQueue
+from termcolor import colored as clr
 
 
-def get_experience_replay(capacity, args, batch_size=1):
+def greedy_update(mem, transitions, losses):
+    """ Callback for reinserting transitions in the experience replay with the
+    new priorities.
+    """
+    td_errors = np.abs(losses).squeeze()
+    td_errors = [td_errors] if td_errors.shape == () else td_errors
+
+    for td_err, transition in zip(td_errors, transitions):
+        mem.push_updated(td_err, transition)
+
+
+def rank_update(mem, transitions, losses):
+    """ Callback for updating priorities in the experience replay.
+    """
+    td_errors = np.abs(losses).squeeze()
+    td_errors = [td_errors] if td_errors.shape == () else td_errors
+
+    for td_err, transition in zip(td_errors, transitions):
+        # for rank based updates the sampled transition contains the idx in the
+        # replay buffer from where it was sampled
+        mem.update(transition[0], td_err)
+
+
+def get_experience_replay(capacity, sampling='uniform', batch_size=1, **kwargs):
     """ Factory for various Experience Replay implementations. """
 
-    kwargs = {}
-    if args.strategy == 'rank':
-        kwargs['k'] = 32 if capacity > 30 else 3
-        if 'alpha' in args:
-            kwargs['alpha'] = args.alpha
-    elif args.strategy == 'uniform':
-        kwargs = {'collate': _collate, 'full_transition': True}
+    # common Experience Replay args
+    er_args = {'capacity': capacity, 'batch_size': batch_size}
 
-    return BUFFERS[args.strategy](capacity, batch_size=batch_size, **kwargs)
+    # additional args depending on implementation
+    if sampling == 'uniform':
+        er_args['collate'] = _collate
+        er_args['full_transition'] = True
+    elif sampling == 'rank':
+        er_args['k'] = 32 if capacity > 30 else 3
+        if 'alpha' in kwargs:
+            er_args['alpha'] = kwargs['alpha']
+
+    # pick callback used for updating priorities
+    cb = greedy_update if sampling in ('greedy-pq', 'greedy-hpq') else None
+    cb = rank_update if sampling == 'rank' else cb
+
+    return BUFFERS[sampling](**er_args), cb
 
 
 def _collate(samples):
@@ -173,8 +205,6 @@ class RankSampler:
 
         if self.__capacity == len(self):
             self.__compute_segments()
-            for s, p in zip(self.__segments, self.__segment_probs):
-                print(f'segment{s} with probability {p:6.3f}.')
 
 
     def sample(self):
