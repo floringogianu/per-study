@@ -1,4 +1,5 @@
 name: "Uniform vs Greedy-PQ vs Rank"
 
 mdp_size: 8
-strategy: 'uniform'
+experience_replay:
+  sampling: 'uniform'

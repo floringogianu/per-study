@@ -1,6 +1,7 @@
 _experiment_parameters:
   mdp_size: 6
-  strategy: uniform
+  sampling: uniform
+experience_replay:
+  sampling: uniform
 mdp_size: 6
-strategy: uniform
-title: strategy=uniform; mdp_size=6
+title: sampling=uniform; mdp_size=6

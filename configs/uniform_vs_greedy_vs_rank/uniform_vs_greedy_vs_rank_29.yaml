@@ -1,6 +1,7 @@
 _experiment_parameters:
   mdp_size: 16
-  strategy: greedy-pq
+  sampling: greedy-pq
+experience_replay:
+  sampling: greedy-pq
 mdp_size: 16
-strategy: greedy-pq
-title: strategy=greedy-pq; mdp_size=16
+title: sampling=greedy-pq; mdp_size=16

@@ -1,6 +1,7 @@
 _experiment_parameters:
   mdp_size: 8
-  strategy: rank
+  sampling: rank
+experience_replay:
+  sampling: rank
 mdp_size: 8
-strategy: rank
-title: strategy=rank; mdp_size=8
+title: sampling=rank; mdp_size=8
