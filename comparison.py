@@ -13,7 +13,7 @@ from wintermute.policy_improvement import get_td_error
 from liftoff.config import read_config, config_to_string
 
 from utils import get_all_transitions, get_ground_truth, create_paths
-from experience_replay_strategies import get_experience_replay, torch2numpy
+from experience_replay import get_experience_replay, torch2numpy
 
 
 def train(n, mem, estimator, optimizer, verbose=True, update_priorities=None):
@@ -25,7 +25,11 @@ def train(n, mem, estimator, optimizer, verbose=True, update_priorities=None):
     has_converged = False
     step_cnt = 0
     while not has_converged:
-        states, actions, rewards, states_, mask = mem.sample()
+        batch = mem.sample()
+        try:
+            states, actions, rewards, states_, mask = batch
+        except ValueError:
+            _, states, actions, rewards, states_, mask = batch
 
         with torch.no_grad():
             q_targets = estimator(states_)
@@ -45,9 +49,8 @@ def train(n, mem, estimator, optimizer, verbose=True, update_priorities=None):
 
         # update priorities
         if update_priorities:
-            transitions = torch2numpy(states, actions, rewards, states_, mask)
+            transitions = torch2numpy(batch)
             update_priorities(mem, transitions, losses.detach().numpy())
-
 
         # check for convergence
         with torch.no_grad():
@@ -95,6 +98,18 @@ def greedy_update(mem, transitions, losses):
         mem.push_updated(td_err, transition)
 
 
+def rank_update(mem, transitions, losses):
+    """ Callback for updating priorities in the experience replay.
+    """
+    td_errors = np.abs(losses).squeeze()
+    td_errors = [td_errors] if td_errors.shape == () else td_errors
+
+    for td_err, transition in zip(td_errors, transitions):
+        # for rank based updates the sampled transition contains the idx in the
+        # replay buffer from where it was sampled
+        mem.update(transition[0], td_err)
+
+
 def run(args):
     """ Experiment trial. """
     n = args.mdp_size
@@ -107,6 +122,7 @@ def run(args):
 
     # run training
     cb = greedy_update if strategy in ('greedy-pq', 'greedy-hpq') else None
+    cb = rank_update if strategy == 'rank' else cb
     step_cnt = train(n, mem, estimator, optimizer, update_priorities=cb,
                      verbose=True)
 
