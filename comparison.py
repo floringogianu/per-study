@@ -70,12 +70,12 @@ def train(n, mem, estimator, optimizer, verbose=True, update_priorities=None):
     return step_cnt
 
 
-def configure_experiment(n, strategy='uniform', lr=0.25):
+def configure_experiment(n, args, lr=0.25):
     """ Sets up the objects required for running the experiment. """
     env = gym.make(f'BlindCliffWalk-N{n}-v0')
     transitions = get_all_transitions(env, n)
 
-    mem = get_experience_replay(len(transitions), strategy=strategy)
+    mem = get_experience_replay(len(transitions), args)
 
     for transition in transitions:
         mem.push(transition)
@@ -84,7 +84,12 @@ def configure_experiment(n, strategy='uniform', lr=0.25):
     optimizer = SGD(estimator.parameters(), lr=lr)
     optimizer.zero_grad()
 
-    return mem, estimator, optimizer
+    cb = greedy_update if args.strategy in ('greedy-pq', 'greedy-hpq') else None
+    cb = rank_update if args.strategy == 'rank' else cb
+
+    print(f'Experience Replay Implementation: {mem}')
+
+    return mem, estimator, optimizer, cb
 
 
 def greedy_update(mem, transitions, losses):
@@ -110,25 +115,35 @@ def rank_update(mem, transitions, losses):
         mem.update(transition[0], td_err)
 
 
+def get_sampling_variant(strategy, **kwargs):
+    if not kwargs:
+        return strategy
+    for k, v in kwargs.items():
+        strategy += f'_{k}:{v}'
+    return strategy
+
+
+
 def run(args):
     """ Experiment trial. """
     n = args.mdp_size
-    strategy = args.strategy
 
-    mem, estimator, optimizer = configure_experiment(n, strategy)
+    mem, estimator, optimizer, cb = configure_experiment(n, args)
     # initialize weights
     estimator.weight.data.normal_(0, 0.1)
     estimator.bias.data.normal_(0, 1)
 
     # run training
-    cb = greedy_update if strategy in ('greedy-pq', 'greedy-hpq') else None
-    cb = rank_update if strategy == 'rank' else cb
     step_cnt = train(n, mem, estimator, optimizer, update_priorities=cb,
                      verbose=True)
 
     # do reporting
+    hp_names = ('alpha', 'beta')
+    hyperparams = {h: args.__dict__[h] for h in hp_names if h in args}
+    sampling_variant = get_sampling_variant(args.strategy, **hyperparams)
+
     columns = ['N', 'mem_size', 'optim_steps', 'trial', 'sampling_type']
-    data = [[n, len(mem), step_cnt, args.run_id, strategy]]
+    data = [[n, len(mem), step_cnt, args.run_id, sampling_variant]]
     result = pd.DataFrame(data, columns=columns)
 
     # log results
