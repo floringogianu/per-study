@@ -1,0 +1,5 @@
+name: "Rank alpha sweep"
+
+mdp_size: 8
+strategy: 'rank'
+alpha: .5

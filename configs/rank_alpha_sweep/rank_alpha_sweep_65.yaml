@@ -1,0 +1,6 @@
+_experiment_parameters:
+  alpha: 0.4
+  mdp_size: 7
+alpha: 0.4
+mdp_size: 7
+title: alpha=0.4; mdp_size=7
