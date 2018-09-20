@@ -1,0 +1,6 @@
+_experiment_parameters:
+  mdp_size: 4
+  strategy: rank
+mdp_size: 4
+strategy: rank
+title: strategy=rank; mdp_size=4
