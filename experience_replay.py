@@ -24,11 +24,14 @@ def get_experience_replay(capacity, batch_size=1, strategy='uniform'):
 
     # TODO: fix the factory, all experience replay implementations should
     # have a common constructor.
+    kwargs = {}
+    if strategy == 'rank':
+        kwargs['k'] = 32 if capacity > 30 else 3
 
     if strategy == 'uniform':
         return NaiveExperienceReplay(capacity, batch_size=batch_size,
                                      collate=_collate, full_transition=True)
-    return BUFFERS[strategy](capacity, batch_size=batch_size)
+    return BUFFERS[strategy](capacity, batch_size=batch_size, **kwargs)
 
 
 def _collate(samples):
@@ -142,7 +145,7 @@ class RankSampler:
         Experience Replay](https://arxiv.org/pdf/1511.05952.pdf) used in the
         BlindCliffWalk experiments.
     """
-    def __init__(self, capacity, batch_size=1, collate=None, k=None):
+    def __init__(self, capacity, batch_size=1, collate=None, alpha=0.9, k=None):
         self.__pq = PriorityQueue()
         self.__capacity = capacity
         self.__batch_size = batch_size
@@ -150,7 +153,7 @@ class RankSampler:
         self.__collate = collate or _collate_with_index
         self.__position = 0
 
-        self.__alpha = 0.7
+        self.__alpha = alpha
         self.__k = k if k else batch_size
         self.__partitions = []
         self.__segments = []

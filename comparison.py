@@ -13,7 +13,7 @@ from wintermute.policy_improvement import get_td_error
 from liftoff.config import read_config, config_to_string
 
 from utils import get_all_transitions, get_ground_truth, create_paths
-from experience_replay_strategies import get_experience_replay, torch2numpy
+from experience_replay import get_experience_replay, torch2numpy
 
 
 def train(n, mem, estimator, optimizer, verbose=True, update_priorities=None):
