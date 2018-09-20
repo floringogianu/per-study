@@ -1,6 +1,12 @@
 _experiment_parameters:
-  alpha: 0.5
+  experience_replay:
+    __name: rank_alpha:0.7
+    alpha: 0.7
+    sampling: rank
   mdp_size: 16
-alpha: 0.5
+experience_replay:
+  __name: rank_alpha:0.7
+  alpha: 0.7
+  sampling: rank
 mdp_size: 16
-title: alpha=0.5; mdp_size=16
+title: experience_replay=rank_alpha:0.7; mdp_size=16

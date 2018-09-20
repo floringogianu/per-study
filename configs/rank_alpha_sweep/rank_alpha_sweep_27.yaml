@@ -1,6 +1,10 @@
 _experiment_parameters:
-  alpha: 0.1
+  experience_replay:
+    __name: greedy-pq
+    sampling: greedy-pq
   mdp_size: 14
-alpha: 0.1
+experience_replay:
+  __name: greedy-pq
+  sampling: greedy-pq
 mdp_size: 14
-title: alpha=0.1; mdp_size=14
+title: experience_replay=greedy-pq; mdp_size=14

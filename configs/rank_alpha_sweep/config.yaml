@@ -1,2 +1,10 @@
 mdp_size: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
-alpha: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+
+experience_replay:
+  - {"__name": "uniform", "sampling": "uniform"}
+  - {"__name": "greedy-pq", "sampling": "greedy-pq"}
+  - {"__name": "rank_alpha:0.1", "sampling": "rank", "alpha": 0.1}
+  - {"__name": "rank_alpha:0.3", "sampling": "rank", "alpha": 0.3}
+  - {"__name": "rank_alpha:0.5", "sampling": "rank", "alpha": 0.5}
+  - {"__name": "rank_alpha:0.7", "sampling": "rank", "alpha": 0.7}
+  - {"__name": "rank_alpha:0.9", "sampling": "rank", "alpha": 0.9}

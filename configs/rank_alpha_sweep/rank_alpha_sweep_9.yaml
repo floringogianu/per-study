@@ -1,6 +1,10 @@
 _experiment_parameters:
-  alpha: 0.0
+  experience_replay:
+    __name: uniform
+    sampling: uniform
   mdp_size: 11
-alpha: 0.0
+experience_replay:
+  __name: uniform
+  sampling: uniform
 mdp_size: 11
-title: alpha=0.0; mdp_size=11
+title: experience_replay=uniform; mdp_size=11

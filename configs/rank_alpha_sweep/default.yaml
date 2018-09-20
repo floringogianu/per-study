@@ -1,5 +1,5 @@
-name: "Rank alpha sweep"
+name: "Rank alpha sweep vs Uniform vs Greedy"
 
 mdp_size: 8
-strategy: 'rank'
-alpha: .5
+experience_replay:
+  sampling: 'uniform'
