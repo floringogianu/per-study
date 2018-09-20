@@ -19,19 +19,18 @@ from wintermute.data_structures import NaiveExperienceReplay
 from data_structures import PriorityQueue
 
 
-def get_experience_replay(capacity, batch_size=1, strategy='uniform'):
+def get_experience_replay(capacity, args, batch_size=1):
     """ Factory for various Experience Replay implementations. """
 
-    # TODO: fix the factory, all experience replay implementations should
-    # have a common constructor.
     kwargs = {}
-    if strategy == 'rank':
+    if args.strategy == 'rank':
         kwargs['k'] = 32 if capacity > 30 else 3
+        if 'alpha' in args:
+            kwargs['alpha'] = args.alpha
+    elif args.strategy == 'uniform':
+        kwargs = {'collate': _collate, 'full_transition': True}
 
-    if strategy == 'uniform':
-        return NaiveExperienceReplay(capacity, batch_size=batch_size,
-                                     collate=_collate, full_transition=True)
-    return BUFFERS[strategy](capacity, batch_size=batch_size, **kwargs)
+    return BUFFERS[args.strategy](capacity, batch_size=batch_size, **kwargs)
 
 
 def _collate(samples):
@@ -105,6 +104,10 @@ class GreedyHeapqSampler:
         return len(self.__memory)
 
 
+    def __repr__(self):
+        return f'GreedyHeapqSampler(size={len(self)})'
+
+
 
 class GreedyPQSampler:
     """ Implements the greedy TD-error sampling technique in [Prioritized
@@ -137,6 +140,9 @@ class GreedyPQSampler:
 
     def __len__(self):
         return len(self.__pq)
+
+    def __repr__(self):
+        return f'GreedyPQSampler(size={len(self)})'
 
 
 
@@ -187,6 +193,10 @@ class RankSampler:
 
     def update(self, idx, priority):
         self.__pq.update(idx, -priority)
+
+
+    def __repr__(self):
+        return f'RankSampler(size={len(self)}, α={self.__alpha})'
 
 
     def sort(self):
