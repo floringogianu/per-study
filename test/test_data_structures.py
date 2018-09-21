@@ -2,7 +2,49 @@
 import random
 import unittest
 import heapq
-from bayesian_per.data_structures import PriorityQueue
+from data_structures import PriorityQueue
+from data_structures import SumTree
+
+
+class TestSumTree(unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super(TestSumTree, self).__init__(*args, **kwargs)
+
+    def test_sum_tree_property(self):
+        """ SumTree property for [3,10,12,4,1,2,8,2]. """
+        data = [3, 10, 12, 4, 1, 2, 8, 2]
+        stree = SumTree(len(data), data=data)
+        self.assertEqual(sum(data), stree.get_sum())
+
+
+    def test_update(self):
+        """ SumTree property after 100 pushes and 200 updates. """
+        N = 100
+        N_update = 200
+        interval = (0, 100)
+        data = [random.randint(*interval) for _ in range(N)]
+        stree = SumTree(len(data), data=data)
+        for _ in range(N_update):
+            idx = random.randint(0, len(data)-1)
+            new_val = random.randint(*interval)
+            data[idx] = new_val
+            stree.update(idx, new_val)
+        self.assertEqual(sum(data), stree.get_sum())
+
+
+    def test_update_negative_values(self):
+        """ SumTree property - 100 pushes, 200 updates with negative values. """
+        N = 100
+        N_update = 200
+        interval = (-100, 100)
+        data = [random.randint(*interval) for _ in range(N)]
+        stree = SumTree(len(data), data=data)
+        for _ in range(N_update):
+            idx = random.randint(0, len(data)-1)
+            new_val = random.randint(*interval)
+            data[idx] = new_val
+            stree.update(idx, new_val)
+        self.assertEqual(sum(data), stree.get_sum())
 
 
 class TestPriorityQueue(unittest.TestCase):
