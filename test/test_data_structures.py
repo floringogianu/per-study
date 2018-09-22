@@ -17,6 +17,18 @@ class TestSumTree(unittest.TestCase):
         self.assertEqual(sum(data), stree.get_sum())
 
 
+    def test_retrieval(self):
+        """ Retrieval for s=(24,30,35) and data=[3,10,12,4,1,2,8,2]. """
+        data = [3, 10, 12, 4, 1, 2, 8, 2]
+        stree = SumTree(len(data), data=data)
+
+        # ((idx, value), ...)
+        targets = ((2, 12), (4, 1), (6, 8))
+        sums = (24, 30, 35)
+        for target, s in zip(targets, sums):
+            self.assertEqual(target, stree.get(s))
+
+
     def test_update(self):
         """ SumTree property after 100 pushes and 200 updates. """
         N = 100

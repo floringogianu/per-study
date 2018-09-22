@@ -140,6 +140,26 @@ class SumTree:
         self.__update(idx)
 
 
+    def get(self, subtree_sum):
+        """ Returns the leaf in a given interval.
+        """
+        idx = 0
+        while True:
+            # if idx is a leaf node return the idx and the value
+            if idx >= self.__capacity-1:
+                return (idx-self.__capacity+1, self.__tree[idx])
+
+            # else continue down
+            left = 2*idx+1
+            right = 2*idx+2
+            left_sum = self.__tree[left]
+            if left_sum >= subtree_sum:
+                idx = left
+            else:
+                idx = right
+                subtree_sum -= left_sum
+
+
     def get_sum(self):
         """ Return the sum of all elements in the tree.
         """
