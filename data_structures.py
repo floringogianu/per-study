@@ -132,7 +132,8 @@ class SumTree:
 
 
     def update(self, idx, value):
-        """ Idx expected in the [0, capacity] range.
+        """ Updates the value of a leaf node and all the sums above it.
+        Idx expected in the [0, capacity] range.
         """
         idx = self.__capacity-1+idx
         self.__tree[idx] = value
@@ -147,7 +148,7 @@ class SumTree:
 
     def __update(self, idx):
         """ Receives the idx of a leaf node and updates the sums on all
-            the nodes above it based on its value.
+            the nodes above it based on its current value.
         """
         parent = (idx-1) // 2
         while parent >= 0:
