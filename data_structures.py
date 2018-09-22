@@ -110,7 +110,8 @@ class PriorityQueue:
 
 
 class SumTree:
-    """ SumTree implementation. """
+    """ SumTree implementation with updatable values.
+    """
 
     def __init__(self, capacity, data=None):
         self.__capacity = capacity
@@ -126,32 +127,33 @@ class SumTree:
         """
         idx = self.__capacity-1+self.__size
         self.__tree[idx] = value
+        self.__update(idx)
         self.__size += 1
-
-        parent = (idx-1) // 2
-        while parent >= 0:
-            left, right = 2*parent+1, 2*parent+2
-            self.__tree[parent] = self.__tree[left] + self.__tree[right]
-            parent = (parent-1) // 2
 
 
     def update(self, idx, value):
-        """ Idx expected in the [0, capacity] range
+        """ Idx expected in the [0, capacity] range.
         """
         idx = self.__capacity-1+idx
         self.__tree[idx] = value
-
-        parent = (idx-1) // 2
-        while parent >= 0:
-            left, right = 2*parent+1, 2*parent+2
-            self.__tree[parent] = self.__tree[left] + self.__tree[right]
-            parent = (parent-1) // 2
+        self.__update(idx)
 
 
     def get_sum(self):
         """ Return the sum of all elements in the tree.
         """
         return self.__tree[0]
+
+
+    def __update(self, idx):
+        """ Receives the idx of a leaf node and updates the sums on all
+            the nodes above it based on its value.
+        """
+        parent = (idx-1) // 2
+        while parent >= 0:
+            left, right = 2*parent+1, 2*parent+2
+            self.__tree[parent] = self.__tree[left] + self.__tree[right]
+            parent = (parent-1) // 2
 
 
     def __len__(self):
