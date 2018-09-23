@@ -109,24 +109,87 @@ class PriorityQueue:
         return out
 
 
+class SumTree:
+    """ SumTree implementation with updatable values.
+    """
+
+    def __init__(self, capacity, data=None):
+        self.__capacity = capacity
+        self.__tree = [0 for _ in range(2*capacity-1)]
+        self.__size = 0
+        if data:
+            for item in data:
+                self.push(item)
+
+
+    def push(self, value):
+        """ Push item to its leaf in the tree and update sums.
+        """
+        idx = self.__capacity-1+self.__size
+        self.__tree[idx] = value
+        self.__update(idx)
+        self.__size += 1
+
+
+    def update(self, idx, value):
+        """ Updates the value of a leaf node and all the sums above it.
+        Idx expected in the [0, capacity] range.
+        """
+        idx = self.__capacity-1+idx
+        self.__tree[idx] = value
+        self.__update(idx)
+
+
+    def get(self, subtree_sum):
+        """ Returns the leaf in a given interval.
+        """
+        idx = 0
+        while True:
+            # if idx is a leaf node return the idx and the value
+            if idx >= self.__capacity-1:
+                return (idx-self.__capacity+1, self.__tree[idx])
+
+            # else continue down
+            left = 2*idx+1
+            right = 2*idx+2
+            left_sum = self.__tree[left]
+            if left_sum >= subtree_sum:
+                idx = left
+            else:
+                idx = right
+                subtree_sum -= left_sum
+
+
+    def get_sum(self):
+        """ Return the sum of all elements in the tree.
+        """
+        return self.__tree[0]
+
+
+    def __update(self, idx):
+        """ Receives the idx of a leaf node and updates the sums on all
+            the nodes above it based on its current value.
+        """
+        parent = (idx-1) // 2
+        while parent >= 0:
+            left, right = 2*parent+1, 2*parent+2
+            self.__tree[parent] = self.__tree[left] + self.__tree[right]
+            parent = (parent-1) // 2
+
+
+    def __len__(self):
+        return self.__size
+
+
+    def __str__(self):
+        return f'SumTree(N={len(self)})\n'
+
+
 def main():
     """ Entry point. """
-    import numpy as np
-    import random
-    np.random.seed(10)
-
-    data = [(i, f'item_{i}') for i in range(100)]
-    random.shuffle(data)
-
-    pqueue = PriorityQueue(data)
-
-    for _ in range(35):
-        idx = random.randint(0, 100-1)
-        pqueue.update(idx, random.randint(0, 100))
-
-    print(pqueue)
-    res = [pqueue.pop()[0] for _ in range(len(data))]
-    assert sorted(res) == res, "Blana"
+    data = [3, 10, 12, 4, 1, 2, 8, 2]
+    stree = SumTree(len(data), data=data)
+    print(stree)
 
 
 if __name__ == "__main__":

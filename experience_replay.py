@@ -1,23 +1,30 @@
 """ Experience Replay implementations.
 
+    WARNING: these implementations have not yet been tested as RingBuffers as
+    they are usually used in RL algorithms.
+
     1. GreedyHeapqSampler implements greedy sampling from the buffer using
     python's standard library `heapq`.
 
     2. GreedyPQSampler also implements greedy sampling but using the
     PriorityQueue in `data_structures.py`. The two implementations perform the
-    same
+    same.
 
     3. RankSampler implements the rank-based prioritization using the
     PriorityQueue in `data_structures.py`.
+
+    4. ProportionalSampler implements the proportional based prioritization
+    using the SumTree in `data_structures.py`.
 """
 import heapq
 
 import torch
 import numpy as np
+from termcolor import colored as clr
 
 from wintermute.data_structures import NaiveExperienceReplay
 from data_structures import PriorityQueue
-from termcolor import colored as clr
+from data_structures import SumTree
 
 
 def greedy_update(mem, transitions, losses):
@@ -31,8 +38,8 @@ def greedy_update(mem, transitions, losses):
         mem.push_updated(td_err, transition)
 
 
-def rank_update(mem, transitions, losses):
-    """ Callback for updating priorities in the experience replay.
+def stochastic_update(mem, transitions, losses):
+    """ Callback for updating priorities in the rank-based experience replay.
     """
     td_errors = np.abs(losses).squeeze()
     td_errors = [td_errors] if td_errors.shape == () else td_errors
@@ -53,14 +60,14 @@ def get_experience_replay(capacity, sampling='uniform', batch_size=1, **kwargs):
     if sampling == 'uniform':
         er_args['collate'] = _collate
         er_args['full_transition'] = True
-    elif sampling == 'rank':
+    elif sampling in ('rank', 'proportional'):
         er_args['k'] = 32 if capacity > 30 else 3
         if 'alpha' in kwargs:
             er_args['alpha'] = kwargs['alpha']
 
     # pick callback used for updating priorities
     cb = greedy_update if sampling in ('greedy-pq', 'greedy-hpq') else None
-    cb = rank_update if sampling == 'rank' else cb
+    cb = stochastic_update if sampling in ('rank', 'proportional') else cb
 
     return BUFFERS[sampling](**er_args), cb
 
@@ -199,6 +206,11 @@ class RankSampler:
 
 
     def push(self, transition, priority=None):
+        """ Commit new transition to the PQ. If priority is not available then
+        initialize with a large value making sure every new transition is being
+        sampled and updated. Since our PQ is a Min-PQ, we use the negative of
+        the priority.
+        """
         priority = (self.__position + 1000) or priority
         self.__pq.push((-priority, transition))
         self.__position = (self.__position + 1) % self.__capacity
@@ -208,7 +220,7 @@ class RankSampler:
 
 
     def sample(self):
-        """ TODO: """
+        # TODO: docstring
         segment_idxs = np.random.choice(len(self.__segments),
                                         size=self.__batch_size,
                                         p=self.__segment_probs)
@@ -258,9 +270,68 @@ class RankSampler:
 
 
 
+class ProportionalSampler:
+    """ Implements the proportional-based sampling in [Prioritized
+        Experience Replay](https://arxiv.org/pdf/1511.05952.pdf).
+    """
+    # pylint: disable=too-many-instance-attributes
+    # Nine is reasonable in this case.
+    def __init__(self, capacity, batch_size=1, collate=None, **kwargs):
+        self.__data = [None for _ in range(capacity)]
+        self.__sumtree = SumTree(capacity=capacity)
+        self.__capacity = capacity
+        self.__batch_size = batch_size
+        self.__collate = collate or _collate_with_index
+        self.__alpha = kwargs['alpha'] if 'alpha' in kwargs else 0.9
+        self.__epsilon = kwargs['epsilon'] if 'epsilon' in kwargs else 0.0000001
+        self.__k = kwargs['k'] if 'k' in kwargs else batch_size
+        self.__pos = 0
+
+
+    def push(self, transition):
+        """ Push new transition to the experience replay. If priority not
+        available then initialize with a large priority making sure every new
+        transition is being sampled and updated.
+        """
+        priority = self.__epsilon ** self.__alpha
+        self.__sumtree.update(self.__pos, priority)
+        self.__data[self.__pos] = transition
+        self.__pos = (self.__pos + 1) % self.__capacity
+
+
+    def update(self, idx, priority):
+        """ Updates the priority of a given transition. """
+        priority = (priority + self.__epsilon) ** self.__alpha
+        self.__sumtree.update(idx, priority)
+
+
+    def sample(self):
+        # TODO: docstring
+
+        segment_sz = self.__sumtree.get_sum() / self.__batch_size
+        samples = []
+        for i in range(self.__batch_size):
+            a = i * segment_sz
+            b = (i+1) * segment_sz
+            s = np.random.uniform(a, b)
+            idx, _ = self.__sumtree.get(s)
+            samples.append((idx, self.__data[idx]))
+
+        return self.__collate(samples)
+
+
+    def __len__(self):
+        return len(self.__data)
+
+
+    def __str__(self):
+        props = f'size={len(self)}, α={self.__alpha}, k={self.__k}'
+        return f'ProportionalSampler({props})'
+
+
+
 def torch2numpy(batch):
     """ Convert a torch batch to a list of game transitions.
-
         A batch can contain sampled indices besides the transitions.
     """
     idxs = None
@@ -288,27 +359,5 @@ def torch2numpy(batch):
 BUFFERS = {'uniform': NaiveExperienceReplay,
            'greedy-pq': GreedyPQSampler,
            'greedy-hpq': GreedyHeapqSampler,
-           'rank': RankSampler}
-
-
-def main():
-    import gym
-    import gym_fast_envs
-    from utils.sampling import get_all_transitions
-
-    N = 8
-    transitions = get_all_transitions(gym.make(f'BlindCliffWalk-N{N}-v0'), n=N)
-    mem = RankSampler(len(transitions), batch_size=32)
-
-    for transition in transitions:
-        mem.push(transition)
-
-    for i in range(5):
-        idxs = mem.sample()[0]
-        print(idxs.float().mean())
-        print([t.item() for t in list(idxs)])
-
-
-
-if __name__ == '__main__':
-    main()
+           'rank': RankSampler,
+           'proportional': ProportionalSampler}
