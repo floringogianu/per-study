@@ -229,11 +229,6 @@ class RankSampler:
         self.__pq.update(idx, -priority)
 
 
-    def __repr__(self):
-        props = f'size={len(self)}, α={self.__alpha}, batch={self.__batch_size}'
-        return f'RankSampler({props})'
-
-
     def sort(self):
         for _ in range(len(self)):
             self.__pq.push(self.__pq.pop())
@@ -244,7 +239,7 @@ class RankSampler:
         self.__partitions = []
         self.__segments = []
 
-        segment_sz = int(np.round(N / self.__batch_size))
+        segment_sz = int(np.floor(N / self.__batch_size))
         for i in range(self.__batch_size):
             a = i * segment_sz
             b = (i+1) * segment_sz if i != (self.__batch_size-1) else N
@@ -260,6 +255,11 @@ class RankSampler:
 
     def __len__(self):
         return len(self.__pq)
+
+
+    def __repr__(self):
+        props = f'size={len(self)}, α={self.__alpha}, batch={self.__batch_size}'
+        return f'RankSampler({props})'
 
 
 
