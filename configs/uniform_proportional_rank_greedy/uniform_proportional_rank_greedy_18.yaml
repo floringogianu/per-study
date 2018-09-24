@@ -1,0 +1,7 @@
+_experiment_parameters:
+  mdp_size: 5
+  sampling: proportional
+experience_replay:
+  sampling: proportional
+mdp_size: 5
+title: sampling=proportional; mdp_size=5

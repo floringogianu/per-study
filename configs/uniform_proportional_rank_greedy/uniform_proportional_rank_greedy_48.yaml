@@ -1,0 +1,7 @@
+_experiment_parameters:
+  mdp_size: 5
+  sampling: greedy-pq
+experience_replay:
+  sampling: greedy-pq
+mdp_size: 5
+title: sampling=greedy-pq; mdp_size=5
