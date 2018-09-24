@@ -1,0 +1,6 @@
+name: "Batch size impact in rank-based prioritization"
+
+mdp_size: 8
+experience_replay:
+  sampling: 'rank'
+  batch_size: 32
