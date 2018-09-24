@@ -31,15 +31,16 @@ def get_experience_replay(capacity, sampling='uniform', batch_size=1, **kwargs):
     """ Factory for various Experience Replay implementations. """
 
     # common Experience Replay args
+    batch_size = capacity if batch_size > capacity else batch_size
     er_args = {'capacity': capacity, 'batch_size': batch_size}
+
+    print("batch:", er_args['batch_size'])
 
     # additional args depending on implementation
     if sampling == 'uniform':
         er_args['collate'] = _collate
         er_args['full_transition'] = True
     elif sampling in ('rank', 'proportional'):
-        if batch_size > 3:
-            er_args['batch_size'] = batch_size if capacity > 30 else 3
         if 'alpha' in kwargs:
             er_args['alpha'] = kwargs['alpha']
 
