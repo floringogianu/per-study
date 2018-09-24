@@ -119,9 +119,9 @@ def get_sampling_variant(sampling='uniform', **kwargs):
 
 def run(opt):
     """ Experiment trial. """
-    n = opt.mdp_size
-
     mem, cb, estimator, optimizer, tag = configure_experiment(opt)
+    n, mem_size = opt.mdp_size, len(mem)
+
 
     # initialize weights
     estimator.weight.data.normal_(0, 0.1)
@@ -133,7 +133,7 @@ def run(opt):
 
     # do reporting
     columns = ['N', 'mem_size', 'optim_steps', 'trial', 'sampling_type']
-    data = [[n, len(mem), step_cnt, opt.run_id, tag]]
+    data = [[n, mem_size, step_cnt, opt.run_id, tag]]
     result = pd.DataFrame(data, columns=columns)
 
     # save panda
