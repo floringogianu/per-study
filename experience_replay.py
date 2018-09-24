@@ -27,29 +27,6 @@ from data_structures import PriorityQueue
 from data_structures import SumTree
 
 
-def greedy_update(mem, transitions, losses):
-    """ Callback for reinserting transitions in the experience replay with the
-    new priorities.
-    """
-    td_errors = np.abs(losses).squeeze()
-    td_errors = [td_errors] if td_errors.shape == () else td_errors
-
-    for td_err, transition in zip(td_errors, transitions):
-        mem.push_updated(td_err, transition)
-
-
-def stochastic_update(mem, transitions, losses):
-    """ Callback for updating priorities in the rank-based experience replay.
-    """
-    td_errors = np.abs(losses).squeeze()
-    td_errors = [td_errors] if td_errors.shape == () else td_errors
-
-    for td_err, transition in zip(td_errors, transitions):
-        # for rank based updates the sampled transition contains the idx in the
-        # replay buffer from where it was sampled
-        mem.update(transition[0], td_err)
-
-
 def get_experience_replay(capacity, sampling='uniform', batch_size=1, **kwargs):
     """ Factory for various Experience Replay implementations. """
 
@@ -61,7 +38,8 @@ def get_experience_replay(capacity, sampling='uniform', batch_size=1, **kwargs):
         er_args['collate'] = _collate
         er_args['full_transition'] = True
     elif sampling in ('rank', 'proportional'):
-        er_args['k'] = 32 if capacity > 30 else 3
+        if batch_size > 3:
+            er_args['batch_size'] = batch_size if capacity > 30 else 3
         if 'alpha' in kwargs:
             er_args['alpha'] = kwargs['alpha']
 
@@ -72,27 +50,41 @@ def get_experience_replay(capacity, sampling='uniform', batch_size=1, **kwargs):
     return BUFFERS[sampling](**er_args), cb
 
 
-def _collate(samples):
-    batch = list(zip(*samples))
-    states = torch.cat([torch.from_numpy(s) for s in batch[0]], 0)
-    actions = torch.LongTensor(batch[1]).unsqueeze(1)
-    rewards = torch.FloatTensor(batch[2]).unsqueeze(1)
-    next_states = torch.cat([torch.from_numpy(s) for s in batch[3]], 0)
-    mask = 1 - torch.ByteTensor(batch[4]).unsqueeze(1)
-    return [states.float(), actions, rewards, next_states.float(), mask]
+def greedy_update(mem, transition, loss):
+    """ Callback for reinserting transitions in the experience replay with the
+    new priorities.
+    """
+    td_error = loss.detach().abs().item()
+    mem.push_updated(td_error, transition)
 
 
-def _collate_with_index(samples):
-    idxs, samples = list(zip(*samples))
-    batch = list(zip(*samples))
+def stochastic_update(mem, transition, loss):
+    """ Callback for updating priorities in the rank-based experience replay.
+    """
+    td_error = loss.detach().abs().item()
+    idx = transition[0]
+    mem.update(idx, td_error)
 
-    idxs = torch.LongTensor(idxs).unsqueeze(1)
-    states = torch.cat([torch.from_numpy(s) for s in batch[0]], 0)
-    actions = torch.LongTensor(batch[1]).unsqueeze(1)
-    rewards = torch.FloatTensor(batch[2]).unsqueeze(1)
-    next_states = torch.cat([torch.from_numpy(s) for s in batch[3]], 0)
-    mask = 1 - torch.ByteTensor(batch[4]).unsqueeze(1)
-    return [idxs, states.float(), actions, rewards, next_states.float(), mask]
+
+def _collate(data):
+    batch = [
+        (torch.from_numpy(s).float(),
+         torch.LongTensor([a]).unsqueeze(1),
+         torch.FloatTensor([r]).unsqueeze(1),
+         torch.from_numpy(s_).float(),
+         1-torch.ByteTensor([d]).unsqueeze(1)) for s, a, r, s_, d in data]
+    return batch
+
+
+def _collate_with_index(data):
+    batch = [
+        (i,
+         torch.from_numpy(s).float(),
+         torch.LongTensor([a]).unsqueeze(1),
+         torch.FloatTensor([r]).unsqueeze(1),
+         torch.from_numpy(s_).float(),
+         1-torch.ByteTensor([d]).unsqueeze(1)) for i, (s, a, r, s_, d) in data]
+    return batch
 
 
 class GreedyHeapqSampler:
@@ -190,7 +182,7 @@ class RankSampler:
         Experience Replay](https://arxiv.org/pdf/1511.05952.pdf) used in the
         BlindCliffWalk experiments.
     """
-    def __init__(self, capacity, batch_size=1, collate=None, alpha=0.9, k=None):
+    def __init__(self, capacity, batch_size=1, collate=None, alpha=0.9):
         self.__pq = PriorityQueue()
         self.__capacity = capacity
         self.__batch_size = batch_size
@@ -199,7 +191,6 @@ class RankSampler:
         self.__position = 0
 
         self.__alpha = alpha
-        self.__k = k if k else batch_size
         self.__partitions = []
         self.__segments = []
         self.__segment_probs = []
@@ -238,7 +229,8 @@ class RankSampler:
 
 
     def __repr__(self):
-        return f'RankSampler(size={len(self)}, α={self.__alpha})'
+        props = f'size={len(self)}, α={self.__alpha}, batch={self.__batch_size}'
+        return f'RankSampler({props})'
 
 
     def sort(self):
@@ -251,10 +243,10 @@ class RankSampler:
         self.__partitions = []
         self.__segments = []
 
-        segment_sz = int(np.round(N / self.__k))
-        for i in range(self.__k):
+        segment_sz = int(np.round(N / self.__batch_size))
+        for i in range(self.__batch_size):
             a = i * segment_sz
-            b = (i+1) * segment_sz if i != (self.__k-1) else N
+            b = (i+1) * segment_sz if i != (self.__batch_size-1) else N
 
             partition = [(1 / (idx+1)) ** self.__alpha for idx in range(a, b)]
 
@@ -284,7 +276,6 @@ class ProportionalSampler:
         self.__collate = collate or _collate_with_index
         self.__alpha = kwargs['alpha'] if 'alpha' in kwargs else 0.9
         self.__epsilon = kwargs['epsilon'] if 'epsilon' in kwargs else 0.0000001
-        self.__k = kwargs['k'] if 'k' in kwargs else batch_size
         self.__pos = 0
 
 
@@ -325,35 +316,24 @@ class ProportionalSampler:
 
 
     def __str__(self):
-        props = f'size={len(self)}, α={self.__alpha}, k={self.__k}'
+        props = f'size={len(self)}, α={self.__alpha}, batch={self.__batch_size}'
         return f'ProportionalSampler({props})'
 
 
 
-def torch2numpy(batch):
-    """ Convert a torch batch to a list of game transitions.
-        A batch can contain sampled indices besides the transitions.
+def torch2numpy(transition):
+    """ Convert a torch transition to a numpy one.
+        Transitions can contain indices.
     """
-    idxs = None
+    idx = None
     try:
-        states, actions, rewards, states_, mask = batch
+        s, a, r, s_, mask = transition
     except ValueError:
-        idxs, states, actions, rewards, states_, mask = batch
+        idx, s, a, r, s_, mask = transition
 
-    batch_size = states.shape[0]
-
-    if idxs is not None:
-        return [[int(idxs[i].item()),
-                 states[i].unsqueeze(0).numpy(),
-                 actions[i].item(),
-                 rewards[i].item(),
-                 states_[i].unsqueeze(0).numpy(),
-                 1 - mask[i].item()] for i in range(batch_size)]
-    return [[states[i].unsqueeze(0).numpy(),
-             actions[i].item(),
-             rewards[i].item(),
-             states_[i].unsqueeze(0).numpy(),
-             1 - mask[i].item()] for i in range(batch_size)]
+    if idx is not None:
+        return (idx, s.numpy(), a.item(), r.item(), s_.numpy(), 1-mask.item())
+    return (s.numpy(), a.item(), r.item(), s_.numpy(), 1-mask.item())
 
 
 BUFFERS = {'uniform': NaiveExperienceReplay,

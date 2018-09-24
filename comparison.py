@@ -26,43 +26,48 @@ def train(n, mem, estimator, optimizer, verbose=True, update_priorities=None):
 
     while not has_converged:
         batch = mem.sample()
-        try:
-            states, actions, rewards, states_, mask = batch
-        except ValueError:
-            _, states, actions, rewards, states_, mask = batch
 
-        with torch.no_grad():
-            q_targets = estimator(states_)
+        # we are not doing mini-batch learning
+        for transition in batch:
+            try:
+                state, action, reward, state_, mask = transition
+            except ValueError:
+                _, state, action, reward, state_, mask = transition
 
-        q_values = estimator(states)
-        qsa = q_values.gather(1, actions)
+            with torch.no_grad():
+                q_targets = estimator(state_)
 
-        qsa_target = torch.zeros_like(qsa)
-        qsa_target[mask] = q_targets.max(1, keepdim=True)[0][mask]
 
-        losses = get_td_error(qsa, qsa_target, rewards, gamma, reduction='none')
-        loss = losses.mean()
-        loss.backward()
+            q_values = estimator(state)
+            qsa = q_values.gather(1, action)
 
-        optimizer.step()
-        estimator.zero_grad()
+            qsa_target = torch.zeros_like(qsa)
+            qsa_target[mask] = q_targets.max(1, keepdim=True)[0][mask]
 
-        # update priorities
-        if update_priorities:
-            transitions = torch2numpy(batch)
-            update_priorities(mem, transitions, losses.detach().numpy())
+            loss = get_td_error(qsa, qsa_target, reward, gamma)
+            loss.backward()
 
-        # check for convergence
-        with torch.no_grad():
-            q = estimator(test_states)
-            mse_loss = F.mse_loss(q, ground_truth_values).item()
+            optimizer.step()
+            estimator.zero_grad()
 
-        has_converged = mse_loss < 0.001
-        step_cnt += states.shape[0]
+            # update priorities
+            if update_priorities:
+                update_priorities(mem, torch2numpy(transition), loss)
 
-        # do some logging
-        if step_cnt % 100000 == 0 and verbose:
-            print(f'{step_cnt:3d}  mse_loss={mse_loss:2.4f}.')
+            # check for convergence
+            with torch.no_grad():
+                q = estimator(test_states)
+                mse_loss = F.mse_loss(q, ground_truth_values).item()
+
+            has_converged = mse_loss < 0.001
+            step_cnt += 1
+
+            # do some logging
+            if step_cnt % 100000 == 0 and verbose:
+                print(f'{step_cnt:3d}  mse_loss={mse_loss:2.4f}.')
+
+            if has_converged:
+                break
 
     if verbose:
         print(f'Found ground truth in {step_cnt:6d} steps.')
@@ -102,7 +107,7 @@ def configure_experiment(opt, lr=0.25):
 def get_sampling_variant(sampling='uniform', **kwargs):
     """ Creates a tag of the form sampling + hyperparams if hyperparams exist
     """
-    hp_names = ('alpha', 'beta')
+    hp_names = ('alpha', 'beta', 'batch_size')
     hyperparams = {h: kwargs[h] for h in hp_names if h in kwargs}
 
     if not kwargs:
