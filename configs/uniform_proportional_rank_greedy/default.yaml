@@ -3,3 +3,4 @@ name: "Uniform vs Proportional vs Rank vs Greedy-PQ"
 mdp_size: 8
 experience_replay:
   sampling: 'uniform'
+  batch_size: 32
