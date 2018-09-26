@@ -92,7 +92,7 @@ def configure_experiment(opt, lr=0.25):
         mem.push(transition)
 
     # configure estimator and optimizer
-    estimator = nn.Linear(n+1, 2, bias=True)
+    estimator = nn.Linear(n+1, 2, bias=False)  # already added in the state
     optimizer = SGD(estimator.parameters(), lr=lr)
     optimizer.zero_grad()
 
@@ -125,7 +125,6 @@ def run(opt):
 
     # initialize weights
     estimator.weight.data.normal_(0, 0.1)
-    estimator.bias.data.normal_(0, 1)
 
     # run training
     step_cnt = train(n, mem, estimator, optimizer, update_priorities=cb,
