@@ -8,14 +8,17 @@ import pandas as pd
 import gym
 
 import gym_fast_envs
-from wintermute.policy_improvement import get_td_error
 from liftoff.config import read_config, config_to_string
 
 from utils import get_all_transitions, get_ground_truth, create_paths
 from experience_replay import get_experience_replay, torch2numpy
 
 
-def train(n, mem, estimator, optimizer, verbose=True, update_priorities=None):
+LOSS_F = {'mse': F.mse_loss, 'huber': F.smooth_l1_loss}
+
+
+def train(n, mem, estimator, loss_fn, optimizer, verbose=True,
+          update_priorities=None):
     """ The training sequence. """
     gamma = 1-1/n
 
@@ -44,7 +47,8 @@ def train(n, mem, estimator, optimizer, verbose=True, update_priorities=None):
             qsa_target = torch.zeros_like(qsa)
             qsa_target[mask] = q_targets.max(1, keepdim=True)[0][mask]
 
-            loss = get_td_error(qsa, qsa_target, reward, gamma)
+            qsa_target = (qsa_target * gamma) + reward
+            loss = loss_fn(qsa, qsa_target)
             loss.backward()
 
             optimizer.step()
@@ -91,6 +95,12 @@ def configure_experiment(opt, lr=0.25):
     for transition in transitions:
         mem.push(transition)
 
+    # loss function
+    if 'loss' in opt.__dict__:
+        loss_fn = LOSS_F[opt.loss]
+    else:
+        loss_fn = LOSS_F['huber']
+
     # configure estimator and optimizer
     estimator = nn.Linear(n+1, 2, bias=False)  # already added in the state
     optimizer = SGD(estimator.parameters(), lr=lr)
@@ -99,9 +109,13 @@ def configure_experiment(opt, lr=0.25):
     # get sampling type tag, we use it for reporting
     tag = get_sampling_variant(**opt.experience_replay.__dict__)
 
+    # add loss name in tag if it exists
+    tag = f'{tag}_{opt.loss}' if 'loss' in opt.__dict__ else tag
+
+
     print(f'>>  Experience Replay: {mem}')
 
-    return mem, cb, estimator, optimizer, tag
+    return mem, cb, estimator, loss_fn, optimizer, tag
 
 
 def get_sampling_variant(sampling='uniform', **kwargs):
@@ -119,7 +133,7 @@ def get_sampling_variant(sampling='uniform', **kwargs):
 
 def run(opt):
     """ Experiment trial. """
-    mem, cb, estimator, optimizer, tag = configure_experiment(opt)
+    mem, cb, estimator, loss_fn, optimizer, tag = configure_experiment(opt)
     n, mem_size = opt.mdp_size, len(mem)
 
 
@@ -127,8 +141,8 @@ def run(opt):
     estimator.weight.data.normal_(0, 0.1)
 
     # run training
-    step_cnt = train(n, mem, estimator, optimizer, update_priorities=cb,
-                     verbose=True)
+    step_cnt = train(n, mem, estimator, loss_fn, optimizer,
+                     update_priorities=cb, verbose=True)
 
     # do reporting
     columns = ['N', 'mem_size', 'optim_steps', 'trial', 'sampling_type']

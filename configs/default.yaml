@@ -4,3 +4,6 @@ mdp_size: 10
 
 experience_replay:
   sampling: 'uniform'
+
+# mse or huber
+loss: 'mse'
