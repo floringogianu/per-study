@@ -1,0 +1,6 @@
+name: "Batch size impact in proportional-based prioritization"
+
+mdp_size: 8
+experience_replay:
+  sampling: 'proportional'
+  batch_size: 32

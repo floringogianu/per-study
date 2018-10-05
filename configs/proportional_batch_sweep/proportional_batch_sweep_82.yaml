@@ -1,0 +1,7 @@
+_experiment_parameters:
+  batch_size: 16
+  mdp_size: 9
+experience_replay:
+  batch_size: 16
+mdp_size: 9
+title: batch_size=16; mdp_size=9
