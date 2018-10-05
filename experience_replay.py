@@ -167,6 +167,7 @@ class GreedyPQSampler:
 
 
     def push_updated(self, td_err, transition):
+        td_err += np.random.rand() * 1e-7
         self.__pq.push((-td_err, transition))
 
 
