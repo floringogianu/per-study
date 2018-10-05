@@ -1,0 +1,6 @@
+name: "Baselines with optimum hyperparams."
+
+mdp_size: 8
+experience_replay:
+  sampling: 'uniform'
+  batch_size: 32

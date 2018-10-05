@@ -1,0 +1,12 @@
+_experiment_parameters:
+  experience_replay:
+    __name: greedy-pq
+    batch_size: 1
+    sampling: greedy-pq
+  mdp_size: 2
+experience_replay:
+  __name: greedy-pq
+  batch_size: 1
+  sampling: greedy-pq
+mdp_size: 2
+title: experience_replay=greedy-pq; mdp_size=2
