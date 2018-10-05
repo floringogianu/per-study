@@ -1,0 +1,9 @@
+_experiment_parameters:
+  alpha: 0.8
+  batch_size: 2
+  mdp_size: 3
+experience_replay:
+  alpha: 0.8
+  batch_size: 2
+mdp_size: 3
+title: alpha=0.8; batch_size=2; mdp_size=3
