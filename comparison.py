@@ -14,13 +14,14 @@ from utils import get_all_transitions, get_ground_truth, create_paths
 from experience_replay import get_experience_replay, torch2numpy
 
 
-LOSS_F = {'mse': F.mse_loss, 'huber': F.smooth_l1_loss}
+LOSS_F = {"mse": F.mse_loss, "huber": F.smooth_l1_loss}
 
 
-def train(n, mem, estimator, loss_fn, optimizer, verbose=True,
-          update_priorities=None):
+def train(
+    n, mem, estimator, loss_fn, optimizer, verbose=True, update_priorities=None
+):
     """ The training sequence. """
-    gamma = 1-1/n
+    gamma = 1 - 1 / n
 
     test_states, ground_truth_values = get_ground_truth(n, gamma)
 
@@ -39,7 +40,6 @@ def train(n, mem, estimator, loss_fn, optimizer, verbose=True,
 
             with torch.no_grad():
                 q_targets = estimator(state_)
-
 
             q_values = estimator(state)
             qsa = q_values.gather(1, action)
@@ -67,14 +67,14 @@ def train(n, mem, estimator, loss_fn, optimizer, verbose=True,
             step_cnt += 1
 
             # do some logging
-            if step_cnt % 100000 == 0 and verbose:
-                print(f'{step_cnt:3d}  mse_loss={mse_loss:2.4f}.')
+            if step_cnt % 100_000 == 0 and verbose:
+                print(f"{step_cnt:3d}  mse_loss={mse_loss:2.4f}.")
 
             if has_converged:
                 break
 
     if verbose:
-        print(f'Found ground truth in {step_cnt:6d} steps.')
+        print(f"Found ground truth in {step_cnt:6d} steps.")
 
     return step_cnt
 
@@ -86,23 +86,24 @@ def configure_experiment(opt, lr=0.25):
     sampling_type = opt.experience_replay.sampling
 
     # sample the env
-    env = gym.make(f'BlindCliffWalk-N{n}-v0')
+    env = gym.make(f"BlindCliffWalk-N{n}-v0")
     transitions = get_all_transitions(env, n)
 
     # construct and populate Experience Replay
-    mem, cb = get_experience_replay(len(transitions),
-                                    **opt.experience_replay.__dict__)
+    mem, cb = get_experience_replay(
+        len(transitions), **opt.experience_replay.__dict__
+    )
     for transition in transitions:
         mem.push(transition)
 
     # loss function
-    if 'loss' in opt.__dict__:
+    if "loss" in opt.__dict__:
         loss_fn = LOSS_F[opt.loss]
     else:
-        loss_fn = LOSS_F['huber']
+        loss_fn = LOSS_F["huber"]
 
     # configure estimator and optimizer
-    estimator = nn.Linear(n+1, 2, bias=False)  # already added in the state
+    estimator = nn.Linear(n + 1, 2, bias=False)  # already added in the state
     optimizer = SGD(estimator.parameters(), lr=lr)
     optimizer.zero_grad()
 
@@ -110,24 +111,23 @@ def configure_experiment(opt, lr=0.25):
     tag = get_sampling_variant(**opt.experience_replay.__dict__)
 
     # add loss name in tag if it exists
-    tag = f'{tag}_{opt.loss}' if 'loss' in opt.__dict__ else tag
+    tag = f"{tag}_{opt.loss}" if "loss" in opt.__dict__ else tag
 
-
-    print(f'>>  Experience Replay: {mem}')
+    print(f">>  Experience Replay: {mem}")
 
     return mem, cb, estimator, loss_fn, optimizer, tag
 
 
-def get_sampling_variant(sampling='uniform', **kwargs):
+def get_sampling_variant(sampling="uniform", **kwargs):
     """ Creates a tag of the form sampling + hyperparams if hyperparams exist
     """
-    hp_names = ('alpha', 'beta', 'batch_size')
+    hp_names = ("alpha", "beta", "batch_size")
     hyperparams = {h: kwargs[h] for h in hp_names if h in kwargs}
 
     if not kwargs:
         return sampling
     for k, v in hyperparams.items():
-        sampling += f'_{k}:{v}'
+        sampling += f"_{k}:{v}"
     return sampling
 
 
@@ -136,24 +136,30 @@ def run(opt):
     mem, cb, estimator, loss_fn, optimizer, tag = configure_experiment(opt)
     n, mem_size = opt.mdp_size, len(mem)
 
-
     # initialize weights
     estimator.weight.data.normal_(0, 0.1)
 
     # run training
-    step_cnt = train(n, mem, estimator, loss_fn, optimizer,
-                     update_priorities=cb, verbose=True)
+    step_cnt = train(
+        n,
+        mem,
+        estimator,
+        loss_fn,
+        optimizer,
+        update_priorities=cb,
+        verbose=True,
+    )
 
     # do reporting
-    columns = ['N', 'mem_size', 'optim_steps', 'trial', 'sampling_type']
+    columns = ["N", "mem_size", "optim_steps", "trial", "sampling_type"]
     data = [[n, mem_size, step_cnt, opt.run_id, tag]]
     result = pd.DataFrame(data, columns=columns)
 
     # save panda
-    result.to_msgpack(f'./{opt.out_dir}/results.msgpack')
+    result.to_msgpack(f"./{opt.out_dir}/results.msgpack")
 
     # log results
-    print(f'N={n}, trial={opt.run_id} results -------', flush=True)
+    print(f"N={n}, trial={opt.run_id} results -------", flush=True)
     print(result, flush=True)
 
 
