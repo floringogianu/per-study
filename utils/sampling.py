@@ -49,7 +49,7 @@ def main():
     import gym_fast_envs
 
     for n in range(2, 16):
-        env = gym.make(f'BlindCliffWalk-N{n}-v0')
+        env = gym.make(f"BlindCliffWalk-N{n}-v0")
         get_all_transitions(env, n)
 
 
