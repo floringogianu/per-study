@@ -15,6 +15,8 @@
 
     4. ProportionalSampler implements the proportional based prioritization
     using the SumTree in `data_structures.py`.
+
+    5. BayesianSampler implements model uncertainty based prioritization.
 """
 import heapq
 
