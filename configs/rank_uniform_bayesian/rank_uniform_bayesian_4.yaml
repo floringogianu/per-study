@@ -1,0 +1,12 @@
+_experiment_parameters:
+  experience_replay:
+    __name: uniform
+    batch_size: 32
+    sampling: uniform
+  mdp_size: 6
+experience_replay:
+  __name: uniform
+  batch_size: 32
+  sampling: uniform
+mdp_size: 6
+title: experience_replay=uniform; mdp_size=6
