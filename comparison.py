@@ -11,7 +11,8 @@ import gym_fast_envs
 from liftoff.config import read_config, config_to_string
 
 from utils import get_all_transitions, get_ground_truth, create_paths
-from experience_replay import get_experience_replay, torch2numpy
+from experience_replay import get_experience_replay
+from bootstrapp import BootstrappedEstimator
 
 
 LOSS_F = {"mse": F.mse_loss, "huber": F.smooth_l1_loss}
@@ -33,10 +34,7 @@ def train(
 
         # we are not doing mini-batch learning
         for transition in batch:
-            try:
-                state, action, reward, state_, mask = transition
-            except ValueError:
-                _, state, action, reward, state_, mask = transition
+            state, action, reward, state_, mask, _ = transition
 
             with torch.no_grad():
                 q_targets = estimator(state_)
@@ -56,7 +54,7 @@ def train(
 
             # update priorities
             if update_priorities:
-                update_priorities(mem, torch2numpy(transition), loss)
+                update_priorities(mem, transition, loss)
 
             # check for convergence
             with torch.no_grad():
