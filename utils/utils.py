@@ -5,6 +5,7 @@ from argparse import Namespace
 
 import torch
 
+
 def get_ground_truth(n, gamma):
     """ Compute the ground truth values for the BlindCliffWalk MDP. """
     test_states = torch.cat([torch.ones(n, 1), torch.eye(n)], 1)
@@ -20,9 +21,9 @@ def get_ground_truth(n, gamma):
 
 def create_paths(args: Namespace) -> Namespace:
     if not hasattr(args, "out_dir") or args.out_dir is None:
-        if not os.path.isdir('./results'):
-            os.mkdir('./results')
-        out_dir = f'./results/{str(int(time())):s}_{args.experiment:s}'
+        if not os.path.isdir("./results"):
+            os.mkdir("./results")
+        out_dir = f"./results/{str(int(time())):s}_{args.experiment:s}"
         os.mkdir(out_dir)
         args.out_dir = out_dir
     elif not os.path.isdir(args.out_dir):
