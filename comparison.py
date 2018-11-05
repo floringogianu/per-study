@@ -18,12 +18,33 @@ from bootstrapp import BootstrappedEstimator
 LOSS_F = {"mse": F.mse_loss, "huber": F.smooth_l1_loss}
 
 
-def train(
-    n, mem, estimator, loss_fn, optimizer, verbose=True, update_priorities=None
-):
-    """ The training sequence. """
-    gamma = 1 - 1 / n
+def learn(estimator, loss_fn, optimizer, transition, gamma):
+    """ Compute the td error and optimize the model.
+    """
+    state, action, reward, state_, mask, _ = transition
 
+    with torch.no_grad():
+        q_targets = estimator(state_)
+
+    qsa = estimator(state).gather(1, action)
+
+    qsa_target = torch.zeros_like(qsa)
+    qsa_target[mask] = q_targets.max(1, keepdim=True)[0][mask]
+
+    qsa_target = (qsa_target * gamma) + reward
+    loss = loss_fn(qsa, qsa_target)
+    loss.backward()
+
+    optimizer.step()
+    estimator.zero_grad()
+    return loss
+
+
+def train(n, mem, model, loss_fn, optimizer, update_cb=None, verbose=True):
+    """ The training sequence.
+    """
+
+    gamma = 1 - 1 / n
     test_states, ground_truth_values = get_ground_truth(n, gamma)
 
     has_converged = False
@@ -34,31 +55,17 @@ def train(
 
         # we are not doing mini-batch learning
         for transition in batch:
-            state, action, reward, state_, mask, _ = transition
 
-            with torch.no_grad():
-                q_targets = estimator(state_)
-
-            q_values = estimator(state)
-            qsa = q_values.gather(1, action)
-
-            qsa_target = torch.zeros_like(qsa)
-            qsa_target[mask] = q_targets.max(1, keepdim=True)[0][mask]
-
-            qsa_target = (qsa_target * gamma) + reward
-            loss = loss_fn(qsa, qsa_target)
-            loss.backward()
-
-            optimizer.step()
-            estimator.zero_grad()
+            # compute the td error and optimize the model
+            loss = learn(model, loss_fn, optimizer, transition, gamma)
 
             # update priorities
-            if update_priorities:
-                update_priorities(mem, transition, loss)
+            if update_cb:
+                update_cb(mem, transition, loss)
 
             # check for convergence
             with torch.no_grad():
-                q = estimator(test_states)
+                q = model(test_states)
                 mse_loss = F.mse_loss(q, ground_truth_values).item()
 
             has_converged = mse_loss < 0.001
@@ -139,13 +146,7 @@ def run(opt):
 
     # run training
     step_cnt = train(
-        n,
-        mem,
-        estimator,
-        loss_fn,
-        optimizer,
-        update_priorities=cb,
-        verbose=True,
+        n, mem, estimator, loss_fn, optimizer, update_cb=cb, verbose=True
     )
 
     # do reporting
