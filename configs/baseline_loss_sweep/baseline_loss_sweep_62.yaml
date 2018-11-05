@@ -1,0 +1,16 @@
+_experiment_parameters:
+  experience_replay:
+    __name: rank
+    alpha: 1
+    batch_size: 32
+    sampling: rank
+  loss: huber
+  mdp_size: 4
+experience_replay:
+  __name: rank
+  alpha: 1
+  batch_size: 32
+  sampling: rank
+loss: huber
+mdp_size: 4
+title: experience_replay=rank; loss=huber; mdp_size=4

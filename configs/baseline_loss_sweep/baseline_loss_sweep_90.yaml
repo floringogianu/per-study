@@ -1,0 +1,16 @@
+_experiment_parameters:
+  experience_replay:
+    __name: proportional
+    alpha: 1
+    batch_size: 1
+    sampling: proportional
+  loss: huber
+  mdp_size: 2
+experience_replay:
+  __name: proportional
+  alpha: 1
+  batch_size: 1
+  sampling: proportional
+loss: huber
+mdp_size: 2
+title: experience_replay=proportional; loss=huber; mdp_size=2

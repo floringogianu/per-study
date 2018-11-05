@@ -1,0 +1,7 @@
+name: "Baselines with loss sweep."
+
+mdp_size: 8
+experience_replay:
+  sampling: 'uniform'
+  batch_size: 32
+loss: 'mse'
