@@ -151,7 +151,7 @@ def configure_experiment(opt, lr=0.25):
 def get_sampling_variant(sampling="uniform", **kwargs):
     """ Creates a tag of the form sampling + hyperparams if hyperparams exist
     """
-    hp_names = ("alpha", "beta", "batch_size")
+    hp_names = ("alpha", "beta", "batch_size", "bayesian", "boot_vote")
     hyperparams = {h: kwargs[h] for h in hp_names if h in kwargs}
 
     if not kwargs:
