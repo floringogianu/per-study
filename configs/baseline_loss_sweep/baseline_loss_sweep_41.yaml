@@ -1,0 +1,14 @@
+_experiment_parameters:
+  experience_replay:
+    __name: greedy-pq
+    batch_size: 1
+    sampling: greedy-pq
+  loss: huber
+  mdp_size: 13
+experience_replay:
+  __name: greedy-pq
+  batch_size: 1
+  sampling: greedy-pq
+loss: huber
+mdp_size: 13
+title: experience_replay=greedy-pq; loss=huber; mdp_size=13
