@@ -58,15 +58,22 @@ def greedy_update(mem, transition, loss):
     new priorities.
     """
     td_error = loss.detach().abs().item()
-    mem.push_updated(td_error, transition)
+    mem.push_updated(td_error, torch2numpy(transition))
 
 
 def stochastic_update(mem, transition, loss):
     """ Callback for updating priorities in the rank-based experience replay.
     """
     td_error = loss.detach().abs().item()
-    idx = transition[0]
+    idx = transition[5]["idx"]
     mem.update(idx, td_error)
+
+
+def torch2numpy(transition):
+    """ Convert a torch transition to a numpy one.
+    """
+    s, a, r, s_, mask, _ = transition
+    return (s.numpy(), a.item(), r.item(), s_.numpy(), 1 - mask.item())
 
 
 def _collate(data):
@@ -77,6 +84,7 @@ def _collate(data):
             torch.FloatTensor([r]).unsqueeze(1),
             torch.from_numpy(s_).float(),
             1 - torch.ByteTensor([d]).unsqueeze(1),
+            {},
         )
         for s, a, r, s_, d in data
     ]
@@ -86,12 +94,12 @@ def _collate(data):
 def _collate_with_index(data):
     batch = [
         (
-            i,
             torch.from_numpy(s).float(),
             torch.LongTensor([a]).unsqueeze(1),
             torch.FloatTensor([r]).unsqueeze(1),
             torch.from_numpy(s_).float(),
             1 - torch.ByteTensor([d]).unsqueeze(1),
+            {"idx": i},
         )
         for i, (s, a, r, s_, d) in data
     ]
@@ -314,21 +322,6 @@ class ProportionalSampler:
     def __str__(self):
         props = f"size={len(self)}, α={self.__alpha}, batch={self.__batch_size}"
         return f"ProportionalSampler({props})"
-
-
-def torch2numpy(transition):
-    """ Convert a torch transition to a numpy one.
-        Transitions can contain indices.
-    """
-    idx = None
-    try:
-        s, a, r, s_, mask = transition
-    except ValueError:
-        idx, s, a, r, s_, mask = transition
-
-    if idx is not None:
-        return (idx, s.numpy(), a.item(), r.item(), s_.numpy(), 1 - mask.item())
-    return (s.numpy(), a.item(), r.item(), s_.numpy(), 1 - mask.item())
 
 
 BUFFERS = {
