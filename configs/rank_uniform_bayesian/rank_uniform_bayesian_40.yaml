@@ -1,20 +1,22 @@
 _experiment_parameters:
   experience_replay:
-    __name: uniform-bayes
+    __name: rank-bayes
+    alpha: 0.8
     batch_size: 32
     bayesian: true
     boot_no: 20
     boot_p: 1
     boot_vote: false
-    sampling: uniform
+    sampling: rank
   mdp_size: 12
 experience_replay:
-  __name: uniform-bayes
+  __name: rank-bayes
+  alpha: 0.8
   batch_size: 32
   bayesian: true
   boot_no: 20
   boot_p: 1
   boot_vote: false
-  sampling: uniform
+  sampling: rank
 mdp_size: 12
-title: experience_replay=uniform-bayes; mdp_size=12
+title: experience_replay=rank-bayes; mdp_size=12
