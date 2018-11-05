@@ -3,7 +3,14 @@ name: "Default"
 mdp_size: 10
 
 experience_replay:
-  sampling: 'uniform'
+  sampling: 'rank'
+  batch_size: 32
+  alpha: 0.8
+
+  bayesian: no
+  boot_no: 20
+  boot_p: 1
+  boot_vote: no
 
 # mse or huber
 loss: 'mse'

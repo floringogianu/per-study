@@ -15,8 +15,6 @@
 
     4. ProportionalSampler implements the proportional based prioritization
     using the SumTree in `data_structures.py`.
-
-    5. BayesianSampler implements model uncertainty based prioritization.
 """
 import heapq
 
@@ -35,8 +33,6 @@ def get_experience_replay(capacity, sampling="uniform", batch_size=1, **kwargs):
     # common Experience Replay args
     batch_size = capacity if batch_size > capacity else batch_size
     er_args = {"capacity": capacity, "batch_size": batch_size}
-
-    print("batch:", er_args["batch_size"])
 
     # additional args depending on implementation
     if sampling == "uniform":
@@ -58,6 +54,7 @@ def greedy_update(mem, transition, loss):
     new priorities.
     """
     td_error = loss.detach().abs().item()
+    # print(td_error)
     mem.push_updated(td_error, torch2numpy(transition))
 
 
@@ -72,8 +69,8 @@ def stochastic_update(mem, transition, loss):
 def torch2numpy(transition):
     """ Convert a torch transition to a numpy one.
     """
-    s, a, r, s_, mask, _ = transition
-    return (s.numpy(), a.item(), r.item(), s_.numpy(), 1 - mask.item())
+    s, a, r, s_, mask, meta = transition
+    return (s.numpy(), a.item(), r.item(), s_.numpy(), 1 - mask.item(), meta)
 
 
 def _collate(data):
@@ -84,14 +81,15 @@ def _collate(data):
             torch.FloatTensor([r]).unsqueeze(1),
             torch.from_numpy(s_).float(),
             1 - torch.ByteTensor([d]).unsqueeze(1),
-            {},
+            meta,
         )
-        for s, a, r, s_, d in data
+        for s, a, r, s_, d, meta in data
     ]
     return batch
 
 
 def _collate_with_index(data):
+    # TODO: FIX THIS!!!
     batch = [
         (
             torch.from_numpy(s).float(),
@@ -99,9 +97,9 @@ def _collate_with_index(data):
             torch.FloatTensor([r]).unsqueeze(1),
             torch.from_numpy(s_).float(),
             1 - torch.ByteTensor([d]).unsqueeze(1),
-            {"idx": i},
+            {**meta, "idx": i},
         )
-        for i, (s, a, r, s_, d) in data
+        for i, (s, a, r, s_, d, meta) in data
     ]
     return batch
 

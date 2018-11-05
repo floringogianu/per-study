@@ -57,11 +57,18 @@ def train(n, mem, model, loss_fn, optimizer, update_cb=None, verbose=True):
         for transition in batch:
 
             # compute the td error and optimize the model
-            loss = learn(model, loss_fn, optimizer, transition, gamma)
+            if isinstance(model, BootstrappedEstimator):
+                mask = transition[5]["boot_mask"]
+                for mdl, opt, cond in zip(model, optimizer, mask):
+                    if cond:
+                        learn(mdl, loss_fn, opt, transition, gamma)
+                priority = model.get_uncertainty(transition)
+            else:
+                priority = learn(model, loss_fn, optimizer, transition, gamma)
 
             # update priorities
             if update_cb:
-                update_cb(mem, transition, loss)
+                update_cb(mem, transition, priority)
 
             # check for convergence
             with torch.no_grad():
@@ -88,7 +95,15 @@ def configure_experiment(opt, lr=0.25):
     """ Sets up the objects required for running the experiment.
     """
     n = opt.mdp_size
-    sampling_type = opt.experience_replay.sampling
+    bayesian = False
+
+    if "bayesian" in opt.experience_replay.__dict__:
+        bayesian = opt.experience_replay.bayesian
+        if bayesian:
+            boot_p = opt.experience_replay.boot_p
+            boot_no = opt.experience_replay.boot_no
+            boot_vote = opt.experience_replay.boot_vote
+            bern = torch.distributions.Bernoulli(boot_p)
 
     # sample the env
     env = gym.make(f"BlindCliffWalk-N{n}-v0")
@@ -98,8 +113,12 @@ def configure_experiment(opt, lr=0.25):
     mem, cb = get_experience_replay(
         len(transitions), **opt.experience_replay.__dict__
     )
-    for transition in transitions:
-        mem.push(transition)
+    if bayesian:
+        for transition in transitions:
+            mem.push((*transition, {"boot_mask": bern.sample((boot_no,))}))
+    else:
+        for transition in transitions:
+            mem.push((*transition, {}))
 
     # loss function
     if "loss" in opt.__dict__:
@@ -109,15 +128,21 @@ def configure_experiment(opt, lr=0.25):
 
     # configure estimator and optimizer
     estimator = nn.Linear(n + 1, 2, bias=False)  # already added in the state
+    estimator.weight.data.normal_(0, 0.1)
     optimizer = SGD(estimator.parameters(), lr=lr)
     optimizer.zero_grad()
+
+    if bayesian:
+        estimator = BootstrappedEstimator(estimator, B=boot_no, vote=False)
+        optimizer = [SGD(model.parameters(), lr=lr) for model in estimator]
+        for optim in optimizer:
+            optim.zero_grad()
 
     # get sampling type tag, we use it for reporting
     tag = get_sampling_variant(**opt.experience_replay.__dict__)
 
     # add loss name in tag if it exists
     tag = f"{tag}_{opt.loss}" if "loss" in opt.__dict__ else tag
-
     print(f">>  Experience Replay: {mem}")
 
     return mem, cb, estimator, loss_fn, optimizer, tag
@@ -140,9 +165,6 @@ def run(opt):
     """ Experiment trial. """
     mem, cb, estimator, loss_fn, optimizer, tag = configure_experiment(opt)
     n, mem_size = opt.mdp_size, len(mem)
-
-    # initialize weights
-    estimator.weight.data.normal_(0, 0.1)
 
     # run training
     step_cnt = train(
