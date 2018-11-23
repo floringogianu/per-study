@@ -1,7 +1,9 @@
+""" Implements Bootstrapped Ensembles.
+"""
+
 from copy import deepcopy
 
 import torch
-from torch import nn
 
 
 class BootstrappedEstimator:
@@ -28,17 +30,16 @@ class BootstrappedEstimator:
             return self.__agreed_q_vals(ys)
         return ys.mean(0)
 
-    def get_uncertainty(self, transition):
+    def get_uncertainty(self, states):
         """ Forward through each model and add a dimension representing the
             model in the ensemble. Then return the uncertainty of the ensemble.
 
             Supports batch operations.
         """
-        state, action = transition[0], transition[1][0].item()
         with torch.no_grad():
-            ys = [model(state).unsqueeze(0) for model in self.__ensemble]
+            ys = [model(states).unsqueeze(0) for model in self.__ensemble]
             ys = torch.cat(ys, 0)
-        return ys.std(0)[0][action]
+        return ys.std(0)
 
     def __agreed_q_vals(self, ys):
         bno, state_no = self.__bno, ys.shape[1]
@@ -73,4 +74,4 @@ class BootstrappedEstimator:
         return len(self.__ensemble)
 
     def __repr__(self):
-        return f"BootstrappedEstimator(boot_no={len(self)})"
+        return f"BootstrappedEstimator(N={len(self)})"
