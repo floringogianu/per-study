@@ -1,6 +1,6 @@
 name: "Default"
 
-mdp_size: 10
+mdp_size: 6
 
 experience_replay:
   sampling: 'rank'
@@ -9,8 +9,10 @@ experience_replay:
 
   bayesian: no
   boot_no: 20
-  boot_p: 1
+  boot_p: 0.9
   boot_vote: no
+  boot_shuffle: yes
+  boot_beta: 10
 
 # mse or huber
 loss: 'mse'
