@@ -64,19 +64,25 @@ class BootstrappedEstimator(nn.Module):
 
         return torch.stack(ys, 0).mean(0)
 
-    def var(self, x):
+    def var(self, x, action=None):
         """ Returns the variance (uncertainty) of the ensemble's prediction
             given `x`.
 
         Args:
             x (torch.tensor): Input data
+            action (int): Action index. Used for returning the uncertainty of a
+                given action in state `x`.
 
         Returns:
             var: the uncertainty of the ensemble when predicting `f(x)`.
         """
         with torch.no_grad():
             ys = [model(x) for model in self.__ensemble]
-        return torch.stack(ys, 0).var(0)
+
+        if action is None:
+            return torch.stack(ys, 0).var(0)
+        else:
+            return torch.stack(ys, 0).var(0)[0][action]
 
     def parameters(self, recurse=True):
         """ Groups the ensemble parameters so that the optimizer can keep
