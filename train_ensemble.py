@@ -30,14 +30,14 @@ def test(model, test_states, ground_truth_values):
 
 def log(step, logger, model, test_states, trial):
     """ Log some stats and save them in a panda file. """
-    std = model.get_uncertainty(test_states)
-    for obs in range(std.shape[0]):
-        for act in range(std.shape[1]):
-            logger.update(step, std[obs, act].item(), f"s{obs}a{act}", trial)
+    var = model.var(test_states)
+    for obs in range(var.shape[0]):
+        for act in range(var.shape[1]):
+            logger.update(step, var[obs, act].item(), f"s{obs}a{act}", trial)
     logger.save()
 
 
-def train(mem, model, optimizer, gamma, test_cb, log_cb, dist, verbose=True):
+def train(mem, ensemble, optimizer, gamma, test_cb, log_cb, dist, verbose=True):
     """ The training sequence.
     """
 
@@ -51,10 +51,19 @@ def train(mem, model, optimizer, gamma, test_cb, log_cb, dist, verbose=True):
         for transition in batch:
 
             # compute the td error and optimize the model
-            mask = dist.sample((len(transition[5]["boot_mask"]),))
-            for mdl, opt, cond in zip(model, optimizer, mask):
-                if cond:
-                    learn(mdl, F.mse_loss, opt, transition, gamma)
+            mask = dist.sample((len(ensemble),))
+            mids = [mid for mid, m in enumerate(mask) if m != 0]
+            for mid in mids:
+                # optim.step() is called on all the parameters of the ensemble
+                # when we learn a single component of the ensemble.
+                # therefore we delete the gradients of all the other estimators
+                # to avoid unnecessary operations in optim.step().
+                for i, estimator in enumerate(ensemble):
+                    if i != mid:
+                        estimator.weight.grad = None
+
+                model = partial(ensemble, mid=mid)
+                learn(model, F.mse_loss, optimizer, transition, gamma)
 
             # test for convergence
             test_loss = test_cb()
@@ -97,7 +106,7 @@ class Logger:
         self.__df.to_msgpack(f"{self.__path}.msgpack")
 
 
-def configure_experiment(n, boot_p, boot_no, vote, lr):
+def configure_experiment(n, boot_p, boot_no, vote, beta, lr):
     """ Constructs estimator, optimizer and memory. """
 
     # sample the env
@@ -116,19 +125,19 @@ def configure_experiment(n, boot_p, boot_no, vote, lr):
 
     # configure estimator and optimizer
     estimator = nn.Linear(n + 1, 2, bias=False)  # already added in the state
-    estimator.weight.data.normal_(0, 0.1)
+    estimator = BootstrappedEstimator(
+        estimator, B=boot_no, vote=vote, beta=beta
+    )
+
     optimizer = SGD(estimator.parameters(), lr=lr)
     optimizer.zero_grad()
-
-    estimator = BootstrappedEstimator(estimator, B=boot_no, vote=vote)
-    optimizer = [SGD(model.parameters(), lr=lr) for model in estimator]
-    for optim in optimizer:
-        optim.zero_grad()
 
     return mem, estimator, optimizer, bern
 
 
-def run_experiment(trial, n=2, boot_p=0.5, boot_no=10, vote=True, path=""):
+def run_experiment(
+    trial, n=2, boot_p=0.5, boot_no=10, vote=True, beta=0, path=""
+):
     """ Configures an experiment and calls `train`. """
     lr = 0.25
     gamma = 1 - 1 / n
@@ -136,7 +145,7 @@ def run_experiment(trial, n=2, boot_p=0.5, boot_no=10, vote=True, path=""):
     # get test and train data
     test_states, ground_truth_values = get_ground_truth(n, gamma)
     mem, estimator, optimizer, mask_dist = configure_experiment(
-        n, boot_p, boot_no, vote, lr
+        n, boot_p, boot_no, vote, beta, lr
     )
 
     # configure the test callback
@@ -150,7 +159,7 @@ def run_experiment(trial, n=2, boot_p=0.5, boot_no=10, vote=True, path=""):
     # do reporting
     log_cb = partial(
         log,
-        logger=Logger(["step", "uncertainty", "qsa", "trial"], path),
+        logger=Logger(["step", "var", "qsa", "trial"], path),
         model=estimator,
         test_states=test_states,
         trial=trial,
@@ -163,21 +172,22 @@ def run_experiment(trial, n=2, boot_p=0.5, boot_no=10, vote=True, path=""):
     train(mem, estimator, optimizer, gamma, test_cb, log_cb, mask_dist)
 
 
-def main(n=2, boot_p=0.5, boot_no=10, vote=True, trials=1):
+def main(n=2, boot_p=0.5, boot_no=10, vote=False, trials=1, beta=0):
     """ Entry point.
     """
     # configure experiment outputs
     boot_p_str = str(boot_p).replace(".", "")
-    exp_name = f"mdp{n}_n{boot_no}_p{boot_p_str}_vote{int(vote)}"
+    exp_name = (
+        f"mdp{n}_n{boot_no}_p{boot_p_str}_vote{int(vote)}_beta{int(beta)}"
+    )
     exp_date = "{:%Y%b%d_%H%M%S}".format(datetime.now())
-    print(exp_name)
     exp_dir = f"./results/confidence_dynamics/{exp_date}_{exp_name}/"
     if not os.path.exists(exp_dir):
         os.makedirs(exp_dir)
 
     for trial in range(trials):
         exp_path = f"{exp_dir}trial_{trial}"
-        run_experiment(trial, n, boot_p, boot_no, vote, exp_path)
+        run_experiment(trial, n, boot_p, boot_no, vote, beta, exp_path)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,6 @@ import torch
 from torch import nn
 from torch.optim import SGD
 from torch.nn import functional as F
-import numpy as np
 import pandas as pd
 import gym
 
@@ -36,7 +35,7 @@ def learn(estimator, loss_fn, optimizer, transition, gamma):
     loss.backward()
 
     optimizer.step()
-    estimator.zero_grad()
+    optimizer.zero_grad()
     return loss
 
 
@@ -102,7 +101,6 @@ def configure_experiment(opt, lr=0.25):
         if bayesian:
             boot_p = opt.experience_replay.boot_p
             boot_no = opt.experience_replay.boot_no
-            boot_vote = opt.experience_replay.boot_vote
             bern = torch.distributions.Bernoulli(boot_p)
 
     # sample the env
@@ -180,6 +178,7 @@ def run(opt):
     result.to_msgpack(f"./{opt.out_dir}/results.msgpack")
 
     # log results
+    print(config_to_string(opt), flush=True)
     print(f"N={n}, trial={opt.run_id} results -------", flush=True)
     print(result, flush=True)
 
