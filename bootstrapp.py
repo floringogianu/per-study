@@ -49,7 +49,7 @@ class BootstrappedEstimator(nn.Module):
             mid (int): id of the component in the ensemble to train on `x`.
 
         Returns:
-            torch.tensor: the mean of the ensemble predictions/
+            torch.tensor: the mean of the ensemble predictions.
         """
         if mid is not None:
             y = self.__ensemble[mid](x)
