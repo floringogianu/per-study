@@ -1,0 +1,22 @@
+_experiment_parameters:
+  experience_replay:
+    __name: rank-boot-vote
+    alpha: 0.8
+    batch_size: 32
+    bayesian: true
+    boot_no: 20
+    boot_p: 0.8
+    boot_vote: true
+    sampling: rank
+  mdp_size: 4
+experience_replay:
+  __name: rank-boot-vote
+  alpha: 0.8
+  batch_size: 32
+  bayesian: true
+  boot_no: 20
+  boot_p: 0.8
+  boot_vote: true
+  sampling: rank
+mdp_size: 4
+title: experience_replay=rank-boot-vote; mdp_size=4

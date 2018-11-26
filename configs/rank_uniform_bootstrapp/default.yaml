@@ -1,0 +1,15 @@
+name: "Comparing bayesian with td bootstrapped this time."
+
+mdp_size: 8
+
+experience_replay:
+  sampling: 'uniform'
+  batch_size: 32
+  alpha: 0.8
+
+  bayesian: no
+  boot_no: 20
+  boot_p: 1
+  boot_vote: yes
+
+loss: 'mse'
