@@ -209,7 +209,8 @@ def get_sampling_variant(sampling="uniform", **kwargs):
     if not kwargs:
         return sampling
     for k, v in hyperparams.items():
-        sampling += f"_{k}:{v}"
+        v = int(v) if isinstance(v, bool) else v
+        sampling += f"_{k.replace('boot_', 'b')}:{v}"
     return sampling
 
 
