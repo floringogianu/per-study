@@ -4,42 +4,94 @@
 from copy import deepcopy
 
 import torch
+from torch import nn
 
 
-class BootstrappedEstimator:
-    """ Implements a bootstraped ensemble of estimators.
+class BootstrappedEstimator(nn.Module):
+    """ Implements and ensemble of models.
     """
 
-    def __init__(self, proto_model, B=20, vote=True):
+    def __init__(self, proto_model, B=20, beta=0, vote=False):
+        """BootstrappedEstimator constructor.
+
+        Args:
+            proto_model (torch.nn.Model): Model to be ensembled.
+            B (int, optional): Defaults to 20. Size of the ensemble
+            beta (int, optional): Defaults to 0. The scale of the prior function.
+                If beta=0 there is no prior.
+            vote (bool, optional): Defaults to False. The prediction is given
+                by the majority agreeing on the optimal action.
+        """
+        super(BootstrappedEstimator, self).__init__()
         self.__ensemble = [deepcopy(proto_model) for _ in range(B)]
         self.__bno = B
+        self.__beta = beta
+        self.__priors = []
+        if beta:
+            self.__beta = beta
+            self.__priors = [deepcopy(model) for model in self.__ensemble]
+            for prior in self.__priors:
+                prior.weight.data.normal_(0, 0.1 * beta)
+                prior.weight.requires_grad = False
         self.__vote = vote
 
         for model in self.__ensemble:
             model.weight.data.normal_(0, 0.1)
             # model.reset_parameters()
 
-    def forward(self, x):
-        """ Forward pass through the ensemble. Returns the mean value.
-            Supports batch operations.
+    def forward(self, x, mid=None):
+        """ In training mode, when `mid` is provided, do an inference step
+            through the ensemble component indicated by `mid`. Otherwise it
+            returns the mean of the predictions of the ensemble.
+
+        Args:
+            x (torch.tensor): input of the model
+            mid (int): id of the component in the ensemble to train on `x`.
+
+        Returns:
+            torch.tensor: the mean of the ensemble predictions.
+        """
+        if mid is not None:
+            y = self.__ensemble[mid](x)
+            if self.__priors:
+                y += self.__priors[mid](x)
+            return y
+
+        if self.__priors:
+            ys = [m(x) + p(x) for m, p in zip(self.__ensemble, self.__priors)]
+        else:
+            ys = [model(x) for model in self.__ensemble]
+
+        return torch.stack(ys, 0).mean(0)
+
+    def var(self, x, action=None):
+        """ Returns the variance (uncertainty) of the ensemble's prediction
+            given `x`.
+
+        Args:
+            x (torch.tensor): Input data
+            action (int): Action index. Used for returning the uncertainty of a
+                given action in state `x`.
+
+        Returns:
+            var: the uncertainty of the ensemble when predicting `f(x)`.
         """
         with torch.no_grad():
-            ys = [model(x).unsqueeze(0) for model in self.__ensemble]
-            ys = torch.cat(ys, 0)
-        if self.__vote:
-            return self.__agreed_q_vals(ys)
-        return ys.mean(0)
+            ys = [model(x) for model in self.__ensemble]
 
-    def get_uncertainty(self, states):
-        """ Forward through each model and add a dimension representing the
-            model in the ensemble. Then return the uncertainty of the ensemble.
+        if action is None:
+            return torch.stack(ys, 0).var(0)
+        else:
+            return torch.stack(ys, 0).var(0)[0][action]
 
-            Supports batch operations.
+    def parameters(self, recurse=True):
+        """ Groups the ensemble parameters so that the optimizer can keep
+            separate statistics for each model in the ensemble.
+
+        Returns:
+            iterator: a group of parameters.
         """
-        with torch.no_grad():
-            ys = [model(states).unsqueeze(0) for model in self.__ensemble]
-            ys = torch.cat(ys, 0)
-        return ys.std(0)
+        return [{"params": model.parameters()} for model in self.__ensemble]
 
     def __agreed_q_vals(self, ys):
         bno, state_no = self.__bno, ys.shape[1]
@@ -64,14 +116,11 @@ class BootstrappedEstimator:
             qvals[i][1 - argmax.item()] = min_val
         return qvals
 
-    def __call__(self, transition):
-        return self.forward(transition)
-
     def __iter__(self):
         return iter(self.__ensemble)
 
     def __len__(self):
         return len(self.__ensemble)
 
-    def __repr__(self):
-        return f"BootstrappedEstimator(N={len(self)})"
+    def __str__(self):
+        return f"BootstrappedEstimator(N={len(self)}, beta={self.__beta})"
