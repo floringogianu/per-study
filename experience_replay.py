@@ -15,12 +15,14 @@
 
     4. ProportionalSampler implements the proportional based prioritization
     using the SumTree in `data_structures.py`.
+
+    5. BootstrappedER is a wrapper over any ExperienceReplay implementation.
+    Its purpose is to additionally implement data bootstrapping.
 """
 import heapq
 
 import torch
 import numpy as np
-from termcolor import colored as clr
 
 from wintermute.data_structures import NaiveExperienceReplay
 from data_structures import PriorityQueue
@@ -45,6 +47,18 @@ def get_experience_replay(capacity, sampling="uniform", batch_size=1, **kwargs):
     # pick callback used for updating priorities
     cb = greedy_update if sampling in ("greedy-pq", "greedy-hpq") else None
     cb = stochastic_update if sampling in ("rank", "proportional") else cb
+
+    # bootstrapping
+    if "bayesian" in kwargs:
+        if kwargs["bayesian"]:
+            mem = BootstrappedER(
+                sampling,
+                er_args,
+                kwargs["boot_p"],
+                kwargs["boot_no"],
+                kwargs["boot_shuffle"],
+            )
+            return mem, cb
 
     return BUFFERS[sampling](**er_args), cb
 
@@ -228,7 +242,9 @@ class RankSampler:
         idxs = [np.random.randint(*segment) for segment in segments]
 
         # warning, atypical use of a priority queue
+        # pylint: disable=protected-access
         samples = [(i, self.__pq._PriorityQueue__heap[i][1]) for i in idxs]
+        # pylint: enable=protected-access
 
         return self.__collate(samples)
 
@@ -320,6 +336,36 @@ class ProportionalSampler:
     def __str__(self):
         props = f"size={len(self)}, α={self.__alpha}, batch={self.__batch_size}"
         return f"ProportionalSampler({props})"
+
+
+class BootstrappedER:
+    """ Wrapper over any ER implementation providing also a mechanism for data
+        bootstrapping.
+    """
+
+    def __init__(self, sampling, er_args, boot_p, boot_no, shuffle):
+        self.__delegate = BUFFERS[sampling](**er_args)
+        self.__boot_dist = torch.distributions.Bernoulli(boot_p)
+        self.__boot_no = boot_no
+        self.__shuffle = shuffle
+
+    def sample_mask(self):
+        """ Returns a binary tensor that masks the data for an ensemble.
+        """
+        return self.__boot_dist.sample((self.__boot_no,))
+
+    @property
+    def shuffle(self):
+        return self.__shuffle
+
+    def __getattr__(self, name):
+        return getattr(self.__delegate, name)
+
+    def __str__(self):
+        return f"Bootsrapped{str(self.__delegate)}"
+
+    def __len__(self):
+        return len(self.__delegate)
 
 
 BUFFERS = {

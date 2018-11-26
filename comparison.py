@@ -1,4 +1,6 @@
 """ Compares different experience replay sampling methods. """
+from functools import partial
+
 import torch
 from torch import nn
 from torch.optim import SGD
@@ -6,7 +8,7 @@ from torch.nn import functional as F
 import pandas as pd
 import gym
 
-import gym_fast_envs
+import gym_fast_envs  # pylint: disable=unused-import
 from liftoff.config import read_config, config_to_string
 
 from utils import get_all_transitions, get_ground_truth, create_paths
@@ -18,7 +20,17 @@ LOSS_F = {"mse": F.mse_loss, "huber": F.smooth_l1_loss}
 
 
 def learn(estimator, loss_fn, optimizer, transition, gamma):
-    """ Compute the td error and optimize the model.
+    """ Computes the TD Error and optimises the model.
+
+    Args:
+        model (torch.nn.Module): An ensemble model.
+        loss_fn (function): The loss functions.
+        optimizer (torch.optim.Optim): An optimizer.
+        transition (list): A s, a, r_, s_, d_, meta tuple.
+        gamma (float): The discount factor.
+
+    Returns:
+        torch.tensor: The TD Error.
     """
     state, action, reward, state_, mask, _ = transition
 
@@ -39,6 +51,44 @@ def learn(estimator, loss_fn, optimizer, transition, gamma):
     return loss
 
 
+def learn_bayesian(mem, learn_args):
+    """A wrapper over the `learn` function.
+
+    Args:
+        model (torch.nn.Module): An ensemble model.
+        loss_fn (function): The loss functions.
+        optimizer (torch.optim.Optim): An optimizer.
+        transition (list): A s, a, r_, s_, d_, meta tuple.
+        gamma (float): The discount factor.
+
+    Returns:
+        torch.tensor: Model uncertainty (variance of ensemble's predictions)
+    """
+
+    model, loss_fn, optimizer, transition, gamma = learn_args
+
+    if mem.shuffle:
+        transition[5]["boot_mask"] = mask = mem.sample_mask()
+    else:
+        mask = transition[5]["boot_mask"]
+
+    mids = [mid for mid, m in enumerate(mask) if m != 0]
+    for mid in mids:
+        # optim.step() is called on all the parameters of the
+        # ensemble when we learn a single component of the
+        # ensemble. therefore we delete the gradients of all the
+        # other estimators to avoid unnecessary operations in
+        # optim.step().
+        for i, estimator in enumerate(model):
+            if i != mid:
+                estimator.weight.grad = None
+
+        model_ = partial(model, mid=mid)
+        learn(model_, loss_fn, optimizer, transition, gamma)
+
+    return model.var(transition[0], transition[1][0].item())
+
+
 def train(n, mem, model, loss_fn, optimizer, update_cb=None, verbose=True):
     """ The training sequence.
     """
@@ -57,11 +107,8 @@ def train(n, mem, model, loss_fn, optimizer, update_cb=None, verbose=True):
 
             # compute the td error and optimize the model
             if isinstance(model, BootstrappedEstimator):
-                mask = transition[5]["boot_mask"]
-                for mdl, opt, cond in zip(model, optimizer, mask):
-                    if cond:
-                        learn(mdl, loss_fn, opt, transition, gamma)
-                priority = model.get_uncertainty(transition)
+                learn_args = [model, loss_fn, optimizer, transition, gamma]
+                priority = learn_bayesian(mem, learn_args)
             else:
                 priority = learn(model, loss_fn, optimizer, transition, gamma)
 
@@ -99,9 +146,9 @@ def configure_experiment(opt, lr=0.25):
     if "bayesian" in opt.experience_replay.__dict__:
         bayesian = opt.experience_replay.bayesian
         if bayesian:
-            boot_p = opt.experience_replay.boot_p
             boot_no = opt.experience_replay.boot_no
-            bern = torch.distributions.Bernoulli(boot_p)
+            boot_beta = opt.experience_replay.boot_beta
+            boot_vote = opt.experience_replay.boot_vote
 
     # sample the env
     env = gym.make(f"BlindCliffWalk-N{n}-v0")
@@ -113,7 +160,7 @@ def configure_experiment(opt, lr=0.25):
     )
     if bayesian:
         for transition in transitions:
-            mem.push((*transition, {"boot_mask": bern.sample((boot_no,))}))
+            mem.push((*transition, {"boot_mask": mem.sample_mask()}))
     else:
         for transition in transitions:
             mem.push((*transition, {}))
@@ -127,14 +174,13 @@ def configure_experiment(opt, lr=0.25):
     # configure estimator and optimizer
     estimator = nn.Linear(n + 1, 2, bias=False)  # already added in the state
     estimator.weight.data.normal_(0, 0.1)
+    if bayesian:
+        estimator = BootstrappedEstimator(
+            estimator, B=boot_no, vote=boot_vote, beta=boot_beta
+        )
+
     optimizer = SGD(estimator.parameters(), lr=lr)
     optimizer.zero_grad()
-
-    if bayesian:
-        estimator = BootstrappedEstimator(estimator, B=boot_no, vote=False)
-        optimizer = [SGD(model.parameters(), lr=lr) for model in estimator]
-        for optim in optimizer:
-            optim.zero_grad()
 
     # get sampling type tag, we use it for reporting
     tag = get_sampling_variant(**opt.experience_replay.__dict__)
@@ -149,7 +195,15 @@ def configure_experiment(opt, lr=0.25):
 def get_sampling_variant(sampling="uniform", **kwargs):
     """ Creates a tag of the form sampling + hyperparams if hyperparams exist
     """
-    hp_names = ("alpha", "beta", "batch_size", "bayesian", "boot_vote")
+    hp_names = (
+        "alpha",
+        "beta",
+        "batch_size",
+        "bayesian",
+        "boot_shuffle",
+        "boot_p",
+        "boot_beta"
+    )
     hyperparams = {h: kwargs[h] for h in hp_names if h in kwargs}
 
     if not kwargs:
