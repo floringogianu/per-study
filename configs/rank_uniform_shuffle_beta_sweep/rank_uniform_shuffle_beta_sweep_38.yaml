@@ -1,0 +1,26 @@
+_experiment_parameters:
+  experience_replay:
+    __name: rank-bayes-beta01
+    alpha: 0.8
+    batch_size: 32
+    bayesian: true
+    boot_beta: 0.1
+    boot_no: 20
+    boot_p: 0.9
+    boot_shuffle: true
+    boot_vote: false
+    sampling: rank
+  mdp_size: 10
+experience_replay:
+  __name: rank-bayes-beta01
+  alpha: 0.8
+  batch_size: 32
+  bayesian: true
+  boot_beta: 0.1
+  boot_no: 20
+  boot_p: 0.9
+  boot_shuffle: true
+  boot_vote: false
+  sampling: rank
+mdp_size: 10
+title: experience_replay=rank-bayes-beta01; mdp_size=10
