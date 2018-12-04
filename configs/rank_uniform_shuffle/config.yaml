@@ -7,8 +7,8 @@ experience_replay:
 
   - {"__name": "rank-bayes", "sampling": "rank", "batch_size": 32, "alpha": 0.8,
      "bayesian": yes, "boot_p":0.9, "boot_vote": no, "boot_no": 20,
-     "boot_beta": 10, "boot_shuffle": yes}
+     "boot_beta": 10, "boot_shuffle": no}
 
-  - {"__name": "rank-bayes", "sampling": "rank", "batch_size": 32, "alpha": 0.8,
+  - {"__name": "rank-bayes-shuffle", "sampling": "rank", "batch_size": 32, "alpha": 0.8,
      "bayesian": yes, "boot_p":0.9, "boot_vote": no, "boot_no": 20,
      "boot_beta": 10, "boot_shuffle": yes}

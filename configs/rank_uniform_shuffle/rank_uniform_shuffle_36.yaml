@@ -7,7 +7,7 @@ _experiment_parameters:
     boot_beta: 10
     boot_no: 20
     boot_p: 0.9
-    boot_shuffle: true
+    boot_shuffle: false
     boot_vote: false
     sampling: rank
   mdp_size: 8
@@ -19,7 +19,7 @@ experience_replay:
   boot_beta: 10
   boot_no: 20
   boot_p: 0.9
-  boot_shuffle: true
+  boot_shuffle: false
   boot_vote: false
   sampling: rank
 mdp_size: 8
