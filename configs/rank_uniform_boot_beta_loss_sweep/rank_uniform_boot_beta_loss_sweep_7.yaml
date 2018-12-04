@@ -1,0 +1,14 @@
+_experiment_parameters:
+  experience_replay:
+    __name: uniform
+    batch_size: 32
+    sampling: uniform
+  loss: huber
+  mdp_size: 9
+experience_replay:
+  __name: uniform
+  batch_size: 32
+  sampling: uniform
+loss: huber
+mdp_size: 9
+title: experience_replay=uniform; loss=huber; mdp_size=9
