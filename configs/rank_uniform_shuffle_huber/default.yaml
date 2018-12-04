@@ -1,0 +1,17 @@
+name: "Comparing bayesian with td."
+
+mdp_size: 8
+
+experience_replay:
+  sampling: 'uniform'
+  batch_size: 32
+  alpha: 0.8
+
+  bayesian: no
+  boot_no: 20
+  boot_p: 0.9
+  boot_beta: 10
+  boot_vote: no
+  boot_shuffle: yes
+
+loss: 'huber'
