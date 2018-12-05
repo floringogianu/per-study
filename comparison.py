@@ -183,7 +183,10 @@ def configure_experiment(opt, lr=0.25):
     optimizer.zero_grad()
 
     # get sampling type tag, we use it for reporting
-    tag = get_sampling_variant(**opt.experience_replay.__dict__)
+    try:
+        tag = opt.experience_replay.__name
+    except AttributeError:
+        tag = get_sampling_variant(**opt.experience_replay.__dict__)
 
     # add loss name in tag if it exists
     tag = f"{tag}_{opt.loss}" if "loss" in opt.__dict__ else tag
