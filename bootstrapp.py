@@ -11,7 +11,7 @@ class BootstrappedEstimator(nn.Module):
     """ Implements and ensemble of models.
     """
 
-    def __init__(self, proto_model, B=20, beta=0, vote=False):
+    def __init__(self, proto_model, B=20, beta=0):
         """BootstrappedEstimator constructor.
 
         Args:
@@ -33,7 +33,6 @@ class BootstrappedEstimator(nn.Module):
             for prior in self.__priors:
                 prior.weight.data.normal_(0, 0.1 * beta)
                 prior.weight.requires_grad = False
-        self.__vote = vote
 
         for model in self.__ensemble:
             model.weight.data.normal_(0, 0.1)
@@ -62,7 +61,8 @@ class BootstrappedEstimator(nn.Module):
         else:
             ys = [model(x) for model in self.__ensemble]
 
-        return torch.stack(ys, 0).mean(0)
+        ys = torch.stack(ys, 0)
+        return (ys.mean(0), self.__agreed_q_vals(ys))
 
     def var(self, x, action=None):
         """ Returns the variance (uncertainty) of the ensemble's prediction
