@@ -1,26 +1,18 @@
 """ Compares different experience replay sampling methods. """
 from functools import partial
+from collections import OrderedDict
 
 import torch
-from torch import nn
-from torch.optim import SGD
 from torch.nn import functional as F
-import torch.distributions as D
 import pandas as pd
-import gym
 
 import gym_fast_envs  # pylint: disable=unused-import
 from liftoff.config import read_config, config_to_string
 
-from utils import get_all_transitions, get_ground_truth, create_paths
-from experience_replay import get_experience_replay
-from bootstrapp import BootstrappedEstimator
+from utils import create_paths, configure_experiment, get_ground_truth
 
 
-LOSS_F = {"mse": F.mse_loss, "huber": F.smooth_l1_loss}
-
-
-def learn(estimator, loss_fn, optimizer, transition, gamma):
+def learn(estimator, transition, loss_fn, optimizer, gamma):
     """ Computes the TD Error and optimises the model.
 
     Args:
@@ -52,21 +44,10 @@ def learn(estimator, loss_fn, optimizer, transition, gamma):
     return loss
 
 
-def learn_bayesian(mem, learn_args):
-    """A wrapper over the `learn` function.
-
-    Args:
-        model (torch.nn.Module): An ensemble model.
-        loss_fn (function): The loss functions.
-        optimizer (torch.optim.Optim): An optimizer.
-        transition (list): A s, a, r_, s_, d_, meta tuple.
-        gamma (float): The discount factor.
-
-    Returns:
-        torch.tensor: Model uncertainty (variance of ensemble's predictions)
+def learn_ensemble(ensemble, transition, learner, mem):
+    """A wrapper over the `learn` function for optimizing an ensemble of
+    estimators (`model`).
     """
-
-    model, loss_fn, optimizer, transition, gamma = learn_args
 
     if mem.shuffle:
         transition[5]["boot_mask"] = mask = mem.sample_mask()
@@ -80,23 +61,19 @@ def learn_bayesian(mem, learn_args):
         # ensemble. therefore we delete the gradients of all the
         # other estimators to avoid unnecessary operations in
         # optim.step().
-        for i, estimator in enumerate(model):
+        for i, estimator in enumerate(ensemble):
             if i != mid:
                 estimator.weight.grad = None
 
-        model_ = partial(model, mid=mid)
-        learn(model_, loss_fn, optimizer, transition, gamma)
+        ensemble_ = partial(ensemble, mid=mid)
+        learner(ensemble_, transition)
 
-    return model.var(transition[0], transition[1][0].item())
+    return ensemble.var(transition[0], transition[1][0].item())
 
 
-def train(n, mem, model, loss_fn, optimizer, update_cb=None, verbose=True):
+def train(mem, model, learner, tester, update_cb=None):
     """ The training sequence.
     """
-
-    gamma = 1 - 1 / n
-    test_states, ground_truth_values = get_ground_truth(n, gamma)
-
     has_converged = False
     step_cnt = 0
 
@@ -106,186 +83,83 @@ def train(n, mem, model, loss_fn, optimizer, update_cb=None, verbose=True):
         # we are not doing mini-batch learning
         for transition in batch:
 
-            # compute the td error and optimize the model
-            if isinstance(model, BootstrappedEstimator):
-                learn_args = [model, loss_fn, optimizer, transition, gamma]
-                priority = learn_bayesian(mem, learn_args)
-            else:
-                priority = learn(model, loss_fn, optimizer, transition, gamma)
+            priority = learner(model, transition)
 
             # update priorities
             if update_cb:
                 update_cb(mem, transition, priority)
 
-            # check for convergence
-            with torch.no_grad():
-                q = model(test_states)
-                mse_loss = F.mse_loss(q, ground_truth_values).item()
-
-            has_converged = mse_loss < 0.001
             step_cnt += 1
 
-            # do some logging
-            if step_cnt % 100_000 == 0 and verbose:
-                print(f"{step_cnt:3d}  mse_loss={mse_loss:2.4f}.")
+            # check for convergence
+            has_converged = tester(step_cnt)
 
             if has_converged:
                 break
 
-    if verbose:
-        print(f"Found ground truth in {step_cnt:6d} steps.")
 
-    return step_cnt
-
-
-class StochasticRewards:
-    """ A wrapper over experience replay implementations that adds noise with
-    a given precision to the rewards. We use this to simulate a stochastic
-    environment within our experimental setup which has a fixed size buffer
-    containing the transitions corresponding to an uniform exploration.
+class ConvergenceTester:
+    """ Checks for convergence on one or two metrics.
     """
-
-    def __init__(self, delegate, noise_precision):
-        """ StochasticRewards constructor.
-        Args:
-            delegate (ExperienceReplay): The ER buffer we sample from.
-            noise_precision (float): The noise precision.
-        """
-        self.__delegate = delegate
-        self.__noise_precision = noise_precision
-        self.__pos = D.Normal(1, noise_precision)
-        self.__neg = D.Normal(0, noise_precision)
-
-    def sample(self):
-        """Adds noise to the reward in the sampled transitions.
-
-        Returns:
-            list: A batch of transitions.
-        """
-        pos, neg = self.__pos, self.__neg
-        batch = self.__delegate.sample()
-        batch_ = []
-        for transition in batch:
-            s, a, r, s_, d, m = transition
-            r = neg.sample(r.shape) if m["win"] == 0 else pos.sample(r.shape)
-            batch_.append((s, a, r, s_, d, m))
-        return batch_
-
-    def __getattr__(self, name):
-        return getattr(self.__delegate, name)
-
-    def __str__(self):
-        return f"Noiser({str(self.__delegate)}, β={self.__noise_precision})."
-
-    def __len__(self):
-        return len(self.__delegate)
-
-
-def configure_experiment(opt, lr=0.25):
-    """ Sets up the objects required for running the experiment.
-    """
-    n = opt.mdp_size
-    bayesian = False
-
-    if "bayesian" in opt.experience_replay.__dict__:
-        bayesian = opt.experience_replay.bayesian
-        if bayesian:
-            boot_no = opt.experience_replay.boot_no
-            boot_beta = opt.experience_replay.boot_beta
-            boot_vote = opt.experience_replay.boot_vote
-
-    # sample the env
-    env = gym.make(f"BlindCliffWalk-N{n}-v0")
-    transitions = get_all_transitions(env, n)
-
-    # construct and populate Experience Replay
-    mem, cb = get_experience_replay(
-        len(transitions), **opt.experience_replay.__dict__
-    )
-    if bayesian:
-        for transition in transitions:
-            meta = {"boot_mask": mem.sample_mask(), "win": transition[2]}
-            mem.push((*transition, meta))
-    else:
-        for transition in transitions:
-            # we need this meta information for the experiments with stochastic
-            # rewards
-            meta = {"win": transition[2]}
-            mem.push((*transition, meta))
-
-    # wrap the experience replay in a class that adds noise to the rewards
-    # returned every time we call `mem.sample()`.
-    try:
-        if opt.reward_noise_precision:
-            mem = StochasticRewards(mem, opt.reward_noise_precision)
-    except AttributeError:
-        pass
-
-    # loss function
-    if "loss" in opt.__dict__:
-        loss_fn = LOSS_F[opt.loss]
-    else:
-        loss_fn = LOSS_F["huber"]
-
-    # configure estimator and optimizer
-    estimator = nn.Linear(n + 1, 2, bias=False)  # already added in the state
-    estimator.weight.data.normal_(0, 0.1)
-    if bayesian:
-        estimator = BootstrappedEstimator(
-            estimator, B=boot_no, vote=boot_vote, beta=boot_beta
+    def __init__(self, model, mdp_size, metrics, threshold=0.001):
+        self.__model = model
+        self.__threshold = threshold
+        gamma = 1 - 1 / mdp_size
+        test_states, optim_q_vals = get_ground_truth(mdp_size, gamma)
+        self.__test_states, self.__optim_q_vals = test_states, optim_q_vals
+        self.__converged = OrderedDict(
+            {metric: {"converged": False, "step_cnt": 0} for metric in metrics}
         )
 
-    optimizer = SGD(estimator.parameters(), lr=lr)
-    optimizer.zero_grad()
+    def get_results(self):
+        print(self.__converged)
+        return [metric["step_cnt"] for metric in self.__converged.values()]
 
-    # get sampling type tag, we use it for reporting
-    try:
-        tag = opt.experience_replay.__name
-    except AttributeError:
-        tag = get_sampling_variant(**opt.experience_replay.__dict__)
+    def __call__(self, step_cnt):
+        return self.__has_converged(step_cnt)
 
-    # add loss name in tag if it exists
-    tag = f"{tag}_{opt.loss}" if "loss" in opt.__dict__ else tag
-    print(f">>  Experience Replay: {mem}")
+    def __has_converged(self, step_cnt):
+        losses = []
+        with torch.no_grad():
+            y = self.__model(self.__test_states)
+            if isinstance(y, tuple):
+                for yi in y:
+                    losses.append(F.mse_loss(yi, self.__optim_q_vals).item())
+            else:
+                losses.append(F.mse_loss(y, self.__optim_q_vals).item())
 
-    return mem, cb, estimator, loss_fn, optimizer, tag
+        for i, (k, metric) in enumerate(self.__converged.items()):
+            if not metric["converged"]:
+                self.__converged[k]["converged"] = losses[i] < self.__threshold
+                self.__converged[k]["step_cnt"] = step_cnt
 
-
-def get_sampling_variant(sampling="uniform", **kwargs):
-    """ Creates a tag of the form sampling + hyperparams if hyperparams exist
-    """
-    hp_names = (
-        "alpha",
-        "beta",
-        "batch_size",
-        "bayesian",
-        "boot_shuffle",
-        "boot_p",
-        "boot_beta",
-    )
-    hyperparams = {h: kwargs[h] for h in hp_names if h in kwargs}
-
-    if not kwargs:
-        return sampling
-    for k, v in hyperparams.items():
-        v = int(v) if isinstance(v, bool) else v
-        sampling += f"_{k.replace('boot_', 'b')}:{v}"
-    return sampling
+        return all([m["converged"] for m in self.__converged.values()])
 
 
 def run(opt):
     """ Experiment trial. """
-    mem, cb, estimator, loss_fn, optimizer, tag = configure_experiment(opt)
+    lr = 0.25
+    learners = [learn, learn_ensemble]
+
+    mem, cb, model, learner, tag = configure_experiment(opt, lr, learners)
     n, mem_size = opt.mdp_size, len(mem)
 
+    # configure tester
+    metrics = ["optim_steps"]
+    try:
+        if opt.experience_replay.bayesian:
+            metrics = ["optim_steps", "vote_optim_steps"]
+    except AttributeError:
+        pass
+    tester = ConvergenceTester(model, n, metrics)
+
     # run training
-    step_cnt = train(
-        n, mem, estimator, loss_fn, optimizer, update_cb=cb, verbose=True
-    )
+    train(mem, model, learner, tester, update_cb=cb)
 
     # do reporting
-    columns = ["N", "mem_size", "optim_steps", "trial", "sampling_type"]
-    data = [[n, mem_size, step_cnt, opt.run_id, tag]]
+    optim_steps = tester.get_results()
+    columns = ["N", "mem_size", *metrics, "trial", "sampling_type"]
+    data = [[n, mem_size, *optim_steps, opt.run_id, tag]]
     result = pd.DataFrame(data, columns=columns)
 
     # save panda
