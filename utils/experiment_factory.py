@@ -118,18 +118,20 @@ def configure_experiment(opt, lr, learners):
     # get sampling type tag, we use it for reporting
     try:
         tag = opt.experience_replay.__name
+        rw_noise = opt.reward_noise_precision
+        tag = f"{tag}_det" if rw_noise == 0 else f"{tag}_stoch:{rw_noise}"
     except AttributeError:
         tag = get_sampling_variant(**opt.experience_replay.__dict__)
 
     # add loss name in tag if it exists
     tag = f"{tag}_{opt.loss}" if "loss" in opt.__dict__ else tag
-    print(f">>  Experience Replay: {mem}")
 
     # configure learner
     learner = partial(learn, gamma=gamma, loss_fn=loss_fn, optimizer=optimizer)
     if bayesian:
         learner = partial(learn_ensemble, learner=learner, mem=mem)
 
+    print(f">>  Experience Replay: {mem}")
     return mem, cb, estimator, learner, tag
 
 
