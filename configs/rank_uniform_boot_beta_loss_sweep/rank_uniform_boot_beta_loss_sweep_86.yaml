@@ -1,6 +1,6 @@
 _experiment_parameters:
   experience_replay:
-    __name: rank-bayes-beta001
+    __name: rank-bayes_beta001
     alpha: 0.95
     batch_size: 32
     bayesian: true
@@ -13,7 +13,7 @@ _experiment_parameters:
   loss: mse
   mdp_size: 13
 experience_replay:
-  __name: rank-bayes-beta001
+  __name: rank-bayes_beta001
   alpha: 0.95
   batch_size: 32
   bayesian: true
@@ -25,4 +25,4 @@ experience_replay:
   sampling: rank
 loss: mse
 mdp_size: 13
-title: experience_replay=rank-bayes-beta001; loss=mse; mdp_size=13
+title: experience_replay=rank-bayes_beta001; loss=mse; mdp_size=13

@@ -2,22 +2,22 @@ mdp_size: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 
 loss: ["huber", "mse"]
 experience_replay:
-  - {"__name": "uniform", "sampling": "uniform", "batch_size": 32}
+  - {"__name": "uniform-TD", "sampling": "uniform", "batch_size": 32}
 
-  - {"__name": "rank", "sampling": "rank", "batch_size": 32, "alpha": 0.95}
+  - {"__name": "rank-TD", "sampling": "rank", "batch_size": 32, "alpha": 0.95}
 
-  - {"__name": "rank-bayes-beta001", "sampling": "rank", "batch_size": 32, "alpha": 0.95,
+  - {"__name": "rank-bayes_beta001", "sampling": "rank", "batch_size": 32, "alpha": 0.95,
      "bayesian": yes, "boot_p":0.9, "boot_vote": no, "boot_no": 20,
      "boot_beta": 0.01, "boot_shuffle": yes}
 
-  - {"__name": "rank-bayes-beta01", "sampling": "rank", "batch_size": 32, "alpha": 0.95,
+  - {"__name": "rank-bayes_beta01", "sampling": "rank", "batch_size": 32, "alpha": 0.95,
      "bayesian": yes, "boot_p":0.9, "boot_vote": no, "boot_no": 20,
      "boot_beta": 0.1, "boot_shuffle": yes}
 
-  - {"__name": "rank-bayes-beta05", "sampling": "rank", "batch_size": 32, "alpha": 0.95,
+  - {"__name": "rank-bayes_beta05", "sampling": "rank", "batch_size": 32, "alpha": 0.95,
      "bayesian": yes, "boot_p":0.9, "boot_vote": no, "boot_no": 20,
      "boot_beta": 0.5, "boot_shuffle": yes}
 
-  - {"__name": "rank-bayes-beta1", "sampling": "rank", "batch_size": 32, "alpha": 0.95,
+  - {"__name": "rank-bayes_beta1", "sampling": "rank", "batch_size": 32, "alpha": 0.95,
      "bayesian": yes, "boot_p":0.9, "boot_vote": no, "boot_no": 20,
      "boot_beta": 1, "boot_shuffle": yes}
