@@ -1,0 +1,8 @@
+name: "Confidence Dynamics Default"
+title: "ci_beta05"
+
+mdp_size: 6
+boot_p: 0.9
+boot_no: 20
+vote: no
+beta: 0.5

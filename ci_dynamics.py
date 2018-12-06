@@ -10,8 +10,9 @@ from torch.optim import SGD
 from torch.nn import functional as F
 import pandas as pd
 import gym
-import fire
 from termcolor import colored as clr
+
+from liftoff.config import read_config, config_to_string
 
 from utils import get_all_transitions, get_ground_truth
 from experience_replay import NaiveExperienceReplay, _collate
@@ -135,17 +136,16 @@ def configure_experiment(n, boot_p, boot_no, vote, beta, lr):
     return mem, estimator, optimizer, bern
 
 
-def run_experiment(
-    trial, n=2, boot_p=0.5, boot_no=10, vote=True, beta=0, path=""
-):
+def run(opt):
     """ Configures an experiment and calls `train`. """
+    n = opt.mdp_size
     lr = 0.25
     gamma = 1 - 1 / n
 
     # get test and train data
     test_states, ground_truth_values = get_ground_truth(n, gamma)
     mem, estimator, optimizer, mask_dist = configure_experiment(
-        n, boot_p, boot_no, vote, beta, lr
+        n, opt.boot_p, opt.boot_no, opt.vote, opt.beta, lr
     )
 
     # configure the test callback
@@ -157,38 +157,29 @@ def run_experiment(
     )
 
     # do reporting
+    log_path = f"{opt.out_dir}/{opt.run_id}"
     log_cb = partial(
         log,
-        logger=Logger(["step", "var", "qsa", "trial"], path),
+        logger=Logger(["step", "var", "qsa", "trial"], log_path),
         model=estimator,
         test_states=test_states,
-        trial=trial,
+        trial=opt.run_id,
     )
 
     # train
-    msg = f"Training {estimator} on {mem} with p={boot_p} and vote={vote}."
+    msg = f"Training {estimator} on {mem}."
     print(clr(msg, "green"))
 
     train(mem, estimator, optimizer, gamma, test_cb, log_cb, mask_dist)
 
 
-def main(n=2, boot_p=0.5, boot_no=10, vote=False, trials=1, beta=0):
+def main():
     """ Entry point.
     """
-    # configure experiment outputs
-    boot_p_str = str(boot_p).replace(".", "")
-    exp_name = (
-        f"mdp{n}_n{boot_no}_p{boot_p_str}_vote{int(vote)}_beta{int(beta)}"
-    )
-    exp_date = "{:%Y%b%d_%H%M%S}".format(datetime.now())
-    exp_dir = f"./results/confidence_dynamics/{exp_date}_{exp_name}/"
-    if not os.path.exists(exp_dir):
-        os.makedirs(exp_dir)
-
-    for trial in range(trials):
-        exp_path = f"{exp_dir}trial_{trial}"
-        run_experiment(trial, n, boot_p, boot_no, vote, beta, exp_path)
+    opt = read_config()
+    print(config_to_string(opt))
+    run(opt)
 
 
 if __name__ == "__main__":
-    fire.Fire(main)
+    main()
