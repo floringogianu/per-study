@@ -5,6 +5,7 @@ import torch
 from torch import nn
 from torch.optim import SGD
 from torch.nn import functional as F
+import torch.distributions as D
 import pandas as pd
 import gym
 
@@ -137,6 +138,49 @@ def train(n, mem, model, loss_fn, optimizer, update_cb=None, verbose=True):
     return step_cnt
 
 
+class StochasticRewards:
+    """ A wrapper over experience replay implementations that adds noise with
+    a given precision to the rewards. We use this to simulate a stochastic
+    environment within our experimental setup which has a fixed size buffer
+    containing the transitions corresponding to an uniform exploration.
+    """
+
+    def __init__(self, delegate, noise_precision):
+        """ StochasticRewards constructor.
+        Args:
+            delegate (ExperienceReplay): The ER buffer we sample from.
+            noise_precision (float): The noise precision.
+        """
+        self.__delegate = delegate
+        self.__noise_precision = noise_precision
+        self.__pos = D.Normal(1, noise_precision)
+        self.__neg = D.Normal(0, noise_precision)
+
+    def sample(self):
+        """Adds noise to the reward in the sampled transitions.
+
+        Returns:
+            list: A batch of transitions.
+        """
+        pos, neg = self.__pos, self.__neg
+        batch = self.__delegate.sample()
+        batch_ = []
+        for transition in batch:
+            s, a, r, s_, d, m = transition
+            r = neg.sample(r.shape) if m["win"] == 0 else pos.sample(r.shape)
+            batch_.append((s, a, r, s_, d, m))
+        return batch_
+
+    def __getattr__(self, name):
+        return getattr(self.__delegate, name)
+
+    def __str__(self):
+        return f"Noiser({str(self.__delegate)}, β={self.__noise_precision})."
+
+    def __len__(self):
+        return len(self.__delegate)
+
+
 def configure_experiment(opt, lr=0.25):
     """ Sets up the objects required for running the experiment.
     """
@@ -160,10 +204,22 @@ def configure_experiment(opt, lr=0.25):
     )
     if bayesian:
         for transition in transitions:
-            mem.push((*transition, {"boot_mask": mem.sample_mask()}))
+            meta = {"boot_mask": mem.sample_mask(), "win": transition[2]}
+            mem.push((*transition, meta))
     else:
         for transition in transitions:
-            mem.push((*transition, {}))
+            # we need this meta information for the experiments with stochastic
+            # rewards
+            meta = {"win": transition[2]}
+            mem.push((*transition, meta))
+
+    # wrap the experience replay in a class that adds noise to the rewards
+    # returned every time we call `mem.sample()`.
+    try:
+        if opt.reward_noise_precision:
+            mem = StochasticRewards(mem, opt.reward_noise_precision)
+    except AttributeError:
+        pass
 
     # loss function
     if "loss" in opt.__dict__:
@@ -205,7 +261,7 @@ def get_sampling_variant(sampling="uniform", **kwargs):
         "bayesian",
         "boot_shuffle",
         "boot_p",
-        "boot_beta"
+        "boot_beta",
     )
     hyperparams = {h: kwargs[h] for h in hp_names if h in kwargs}
 
