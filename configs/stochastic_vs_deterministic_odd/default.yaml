@@ -1,7 +1,0 @@
-name: "Stochastic vs Deterministic."
-
-mdp_size: 8
-
-experience_replay:
-  sampling: 'uniform'
-  batch_size: 32
