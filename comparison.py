@@ -98,10 +98,24 @@ def train(mem, model, learner, tester, update_cb=None):
                 break
 
 
+class Logger:
+    def __init__(self, metrics):
+        self.__df = pd.DataFrame(columns=metrics)
+        self.__idx = 0
+
+    def update(self, loss, step, with_vote=0):
+        self.__df.loc[self.__idx] = [step, loss, with_vote]
+        self.__idx += 1
+
+    def get_results(self):
+        return self.__df
+
+
 class ConvergenceTester:
     """ Checks for convergence on one or two metrics.
     """
-    def __init__(self, model, mdp_size, metrics, threshold=0.001):
+
+    def __init__(self, model, mdp_size, metrics, log=None, threshold=0.001):
         self.__model = model
         self.__threshold = threshold
         gamma = 1 - 1 / mdp_size
@@ -110,10 +124,12 @@ class ConvergenceTester:
         self.__converged = OrderedDict(
             {metric: {"converged": False, "step_cnt": 0} for metric in metrics}
         )
+        if log:
+            self.__log = log
 
     def get_results(self):
-        print(self.__converged)
-        return [metric["step_cnt"] for metric in self.__converged.values()]
+        steps = [metric["step_cnt"] for metric in self.__converged.values()]
+        return steps, self.__log.get_results()
 
     def __call__(self, step_cnt):
         return self.__has_converged(step_cnt)
@@ -133,6 +149,10 @@ class ConvergenceTester:
                 self.__converged[k]["converged"] = losses[i] < self.__threshold
                 self.__converged[k]["step_cnt"] = step_cnt
 
+        if self.__log is not None:
+            for i, loss in enumerate(losses):
+                self.__log.update(loss, step_cnt, i)
+
         return all([m["converged"] for m in self.__converged.values()])
 
 
@@ -144,31 +164,50 @@ def run(opt):
     mem, cb, model, learner, tag = configure_experiment(opt, lr, learners)
     n, mem_size = opt.mdp_size, len(mem)
 
-    # configure tester
+    # configure tester @ logger
     metrics = ["optim_steps"]
+    log_metrics = ["step", "loss", "vote"]
     try:
         if opt.experience_replay.bayesian:
             metrics = ["optim_steps", "vote_optim_steps"]
     except AttributeError:
         pass
-    tester = ConvergenceTester(model, n, metrics)
+
+    log = Logger(log_metrics)
+    tester = ConvergenceTester(model, n, metrics, log=log)
 
     # run training
     train(mem, model, learner, tester, update_cb=cb)
 
     # do reporting
-    optim_steps = tester.get_results()
-    columns = ["N", "mem_size", *metrics, "trial", "sampling_type"]
-    data = [[n, mem_size, *optim_steps, opt.run_id, tag]]
-    result = pd.DataFrame(data, columns=columns)
+    pd.set_option("precision", 4)
+    # retrieve logged metrics (optims steps and loss curves)
+    optim_steps, results_df = tester.get_results()
+    loss = opt.loss if "loss" in opt.__dict__ else "mse"
+
+    # add columns to the loss dataframe curves
+    additional_cols = [
+        *metrics,
+        "N",
+        "mem",
+        "trial",
+        "sampling_type",
+        "loss_fn",
+    ]
+    row_vals = [*optim_steps, n, mem_size, opt.run_id, tag, loss]
+    for col, val in zip(additional_cols, row_vals):
+        results_df[col] = val
 
     # save panda
-    result.to_msgpack(f"./{opt.out_dir}/results.msgpack")
+    results_df.to_msgpack(f"./{opt.out_dir}/results.msgpack")
 
     # log results
     print(config_to_string(opt), flush=True)
-    print(f"N={n}, trial={opt.run_id} results -------", flush=True)
-    print(result, flush=True)
+    header = f"N={n}, tag={tag}, trial={opt.run_id} results:"
+    print("-" * (len(header) + 2))
+    print(header, flush=True)
+    print("-" * (len(header) + 2))
+    print(results_df.sample(100), flush=True)
 
 
 def main():
