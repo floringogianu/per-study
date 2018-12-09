@@ -207,7 +207,7 @@ def run(opt):
     print("-" * (len(header) + 2))
     print(header, flush=True)
     print("-" * (len(header) + 2))
-    print(results_df.sample(100), flush=True)
+    print(results_df.head(3), flush=True)
 
 
 def main():
