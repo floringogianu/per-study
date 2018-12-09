@@ -6,10 +6,10 @@ _experiment_parameters:
     bayesian: true
     boot_beta: 0.001
     boot_no: 21
-    boot_p: 0.9
+    boot_p: 0.5
     boot_shuffle: true
     sampling: rank
-  mdp_size: 5
+  mdp_size: 9
   reward_noise_precision: 0.01
 experience_replay:
   __name: "rank-bayes-\u03B20.001-p0.5"
@@ -18,10 +18,10 @@ experience_replay:
   bayesian: true
   boot_beta: 0.001
   boot_no: 21
-  boot_p: 0.9
+  boot_p: 0.5
   boot_shuffle: true
   sampling: rank
-mdp_size: 5
+mdp_size: 9
 reward_noise_precision: 0.01
 title: "experience_replay=rank-bayes-\u03B20.001-p0.5; reward_noise_precision=0.01;\
-  \ mdp_size=5"
+  \ mdp_size=9"

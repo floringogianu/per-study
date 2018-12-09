@@ -9,8 +9,8 @@ _experiment_parameters:
     boot_p: 0.5
     boot_shuffle: true
     sampling: rank
-  mdp_size: 8
-  reward_noise_precision: 0.01
+  mdp_size: 5
+  reward_noise_precision: 0.1
 experience_replay:
   __name: "rank-bayes-\u03B20.1-p0.5"
   alpha: 0.95
@@ -21,7 +21,6 @@ experience_replay:
   boot_p: 0.5
   boot_shuffle: true
   sampling: rank
-mdp_size: 8
-reward_noise_precision: 0.01
-title: "experience_replay=rank-bayes-\u03B20.1-p0.5; reward_noise_precision=0.01;\
-  \ mdp_size=8"
+mdp_size: 5
+reward_noise_precision: 0.1
+title: "experience_replay=rank-bayes-\u03B20.1-p0.5; reward_noise_precision=0.1; mdp_size=5"

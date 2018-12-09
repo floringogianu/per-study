@@ -4,13 +4,13 @@ _experiment_parameters:
     alpha: 0.95
     batch_size: 32
     sampling: rank
-  mdp_size: 6
+  mdp_size: 8
   reward_noise_precision: 0.1
 experience_replay:
   __name: rank-td
   alpha: 0.95
   batch_size: 32
   sampling: rank
-mdp_size: 6
+mdp_size: 8
 reward_noise_precision: 0.1
-title: experience_replay=rank-td; reward_noise_precision=0.1; mdp_size=6
+title: experience_replay=rank-td; reward_noise_precision=0.1; mdp_size=8
