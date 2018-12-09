@@ -53,10 +53,13 @@ class BootstrappedEstimator(nn.Module):
         if mid is not None:
             y = self.__ensemble[mid](x)
             if self.__priors:
+                self.__priors[mid].weight.data.normal_(0, 0.1 * self.__beta)
                 y += self.__priors[mid](x)
             return y
 
         if self.__priors:
+            for prior in self.__priors:
+                prior.weight.data.normal_(0, 0.1 * self.__beta)
             ys = [m(x) + p(x) for m, p in zip(self.__ensemble, self.__priors)]
         else:
             ys = [model(x) for model in self.__ensemble]
