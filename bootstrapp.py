@@ -5,6 +5,7 @@ from copy import deepcopy
 
 import torch
 from torch import nn
+import torch.distributions as D
 
 
 class BootstrappedEstimator(nn.Module):
@@ -26,17 +27,23 @@ class BootstrappedEstimator(nn.Module):
         self.__ensemble = [deepcopy(proto_model) for _ in range(B)]
         self.__bno = B
         self.__beta = beta
+        self.__prior_fns = []
         self.__priors = []
-        if beta:
-            self.__beta = beta
-            self.__priors = [deepcopy(model) for model in self.__ensemble]
-            for prior in self.__priors:
-                prior.weight.data.normal_(0, 0.1 * beta)
-                prior.weight.requires_grad = False
 
         for model in self.__ensemble:
             model.weight.data.normal_(0, 0.1)
             # model.reset_parameters()
+
+        if beta:
+            self.__prior_fns = [deepcopy(model) for model in self.__ensemble]
+            for model, prior_fn in zip(self.__ensemble, self.__prior_fns):
+                # set some priors based on the ensemble initialization
+                loc = model.weight.data.clone()
+                scale = torch.full_like(loc, 0.1 * self.__beta)
+                self.__priors.append(D.Normal(loc, scale))
+                # we won't be training the prior functions
+                prior_fn.weight.requires_grad = False
+
 
     def forward(self, x, mid=None):
         """ In training mode, when `mid` is provided, do an inference step
@@ -53,14 +60,14 @@ class BootstrappedEstimator(nn.Module):
         if mid is not None:
             y = self.__ensemble[mid](x)
             if self.__priors:
-                self.__priors[mid].weight.data.normal_(0, 0.1 * self.__beta)
-                y += self.__priors[mid](x)
+                self.__prior_fns[mid].weight.data = self.__priors[mid].sample()
+                y += self.__prior_fns[mid](x)
             return y
 
         if self.__priors:
-            for prior in self.__priors:
-                prior.weight.data.normal_(0, 0.1 * self.__beta)
-            ys = [m(x) + p(x) for m, p in zip(self.__ensemble, self.__priors)]
+            for prior, prior_fn in zip(self.__priors, self.__prior_fns):
+                prior_fn.weight.data = prior.sample()
+            ys = [m(x) + p(x) for m, p in zip(self.__ensemble, self.__prior_fns)]
         else:
             ys = [model(x) for model in self.__ensemble]
 
