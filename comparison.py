@@ -150,8 +150,9 @@ class ConvergenceTester:
                 self.__converged[k]["step_cnt"] = step_cnt
 
         if self.__log is not None:
-            for i, loss in enumerate(losses):
-                self.__log.update(loss, step_cnt, i)
+            if step_cnt % 100 == 0:
+                for i, loss in enumerate(losses):
+                    self.__log.update(loss, step_cnt, i)
 
         return all([m["converged"] for m in self.__converged.values()])
 
