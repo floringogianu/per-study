@@ -68,7 +68,6 @@ def greedy_update(mem, transition, loss):
     new priorities.
     """
     td_error = loss.detach().abs().item()
-    # print(td_error)
     mem.push_updated(td_error, torch2numpy(transition))
 
 
@@ -306,7 +305,7 @@ class ProportionalSampler:
         available then initialize with a large priority making sure every new
         transition is being sampled and updated.
         """
-        priority = self.__epsilon ** self.__alpha
+        priority = self.__epsilon ** self.__alpha + 1000
         self.__sumtree.update(self.__pos, priority)
         self.__data[self.__pos] = transition
         self.__pos = (self.__pos + 1) % self.__capacity
