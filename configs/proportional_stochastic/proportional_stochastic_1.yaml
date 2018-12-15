@@ -1,0 +1,24 @@
+_experiment_parameters:
+  experience_replay:
+    __name: "prop-bayes-\u03B20.001-p0.5"
+    alpha: 0.95
+    batch_size: 2
+    bayesian: true
+    boot_beta: 0.001
+    boot_no: 21
+    boot_p: 0.5
+    boot_shuffle: true
+    sampling: proportional
+  mdp_size: 6
+experience_replay:
+  __name: "prop-bayes-\u03B20.001-p0.5"
+  alpha: 0.95
+  batch_size: 2
+  bayesian: true
+  boot_beta: 0.001
+  boot_no: 21
+  boot_p: 0.5
+  boot_shuffle: true
+  sampling: proportional
+mdp_size: 6
+title: "experience_replay=prop-bayes-\u03B20.001-p0.5; mdp_size=6"

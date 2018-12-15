@@ -1,0 +1,8 @@
+name: "Proportional sampling on Stochastic MDP"
+
+mdp_size: 8
+reward_noise_precision: 0.1
+
+experience_replay:
+  sampling: 'uniform'
+  batch_size: 32

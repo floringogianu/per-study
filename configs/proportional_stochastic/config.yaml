@@ -1,0 +1,11 @@
+mdp_size: [5, 6, 7, 8, 9, 10, 11, 12]
+
+experience_replay:
+  - {"__name": "prop-bayes-β0.001-p0.5",
+     "sampling": "proportional", "batch_size": 2, "alpha": 0.95,
+     "bayesian": yes, "boot_p": 0.5, "boot_no": 21, "boot_beta": 0.001,
+     "boot_shuffle": yes}
+  - {"__name": "prop-bayes-β0.1-p0.5",
+     "sampling": "proportional", "batch_size": 2, "alpha": 0.95,
+     "bayesian": yes, "boot_p": 0.5, "boot_no": 21, "boot_beta": 0.1,
+     "boot_shuffle": yes}
